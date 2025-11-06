@@ -1,5 +1,20 @@
 # Data
 app/data/*
+app/test_video_splits/
+test_video_splits.zip
+
+# Audio files
+*.mp3
+*.wav
+*.m4a
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
+
+# PDF documents (design docs can be shared separately)
+*.pdf
 
 # Virtual Environment
 venv/
