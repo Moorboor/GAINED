@@ -6,11 +6,13 @@ import pandas as pd
 import io
 import plotly.graph_objects as go
 import dash
+from dash.exceptions import PreventUpdate
 from .data_loader import (
     get_patient_sessions, 
-    load_uploaded_files, 
     load_session_from_disk,
-    encode_audio_to_base64
+    encode_audio_to_base64,
+    process_audio_upload,
+    process_transcript_upload
 )
 
 
@@ -31,23 +33,48 @@ def register_callbacks(app):
         [Output('audio-data', 'data'),
          Output('transcript-data', 'data'),
          Output('upload-status', 'children')],
-        Input('upload-files', 'contents'),
-        State('upload-files', 'filename')
+        [Input('upload-audio', 'contents'),
+         Input('upload-transcript', 'contents')],
+        [State('upload-audio', 'filename'),
+         State('upload-transcript', 'filename')]
     )
-    def handle_file_upload(list_of_contents, list_of_filenames):
-        audio_data, transcript_data, status_messages = load_uploaded_files(
-            list_of_contents, list_of_filenames
-        )
+    def handle_file_upload(audio_content, transcript_content, audio_filename, transcript_filename):
+        ctx = dash.callback_context
+        triggered_id = None
+        if ctx.triggered:
+            triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
+        if not triggered_id:
+            raise PreventUpdate
+        
+        audio_output = no_update
+        transcript_output = no_update
+        status_messages = []
+        
+        if triggered_id == 'upload-audio' and audio_content and audio_filename:
+            new_audio_data, audio_msg = process_audio_upload(audio_content, audio_filename)
+            if new_audio_data:
+                audio_output = new_audio_data
+            if audio_msg:
+                status_messages.append(audio_msg)
+        elif triggered_id == 'upload-transcript' and transcript_content and transcript_filename:
+            new_transcript_data, transcript_msg = process_transcript_upload(transcript_content, transcript_filename)
+            if new_transcript_data:
+                transcript_output = new_transcript_data
+            if transcript_msg:
+                status_messages.append(transcript_msg)
+        else:
+            raise PreventUpdate
+        
+        status_div = no_update
         if status_messages:
             status_div = html.Div([
                 html.Div(msg, style={
                     'color': '#28a745' if '✅' in msg else '#dc3545' if '❌' in msg else '#ffc107'
                 }) for msg in status_messages
             ])
-            return audio_data, transcript_data, status_div
         
-        return no_update, no_update, ""
+        return audio_output, transcript_output, status_div
     
     
     # Load existing session data
@@ -63,8 +90,6 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def load_session_data(n_clicks, patient_id, session_idx):
-        from dash.exceptions import PreventUpdate
-        
         if n_clicks == 0:
             raise PreventUpdate
         
@@ -152,10 +177,37 @@ def register_callbacks(app):
             text_col = 'text' if 'text' in df.columns else 'segment_text'
             speaker_col = 'speaker' if 'speaker' in df.columns else None
             
+            def resolve_speaker(row):
+                speaker_value = row.get('speaker') if speaker_col else None
+                if isinstance(speaker_value, str) and speaker_value.strip():
+                    return speaker_value
+                
+                if 'pred' in df.columns:
+                    pred_val = row.get('pred')
+                    if pd.isna(pred_val):
+                        return 'Unknown'
+                    
+                    try:
+                        numeric_pred = float(pred_val)
+                        if numeric_pred == 1:
+                            return 'Therapist'
+                        if numeric_pred == 0:
+                            return 'Patient'
+                    except (TypeError, ValueError):
+                        pass
+                    
+                    pred_str = str(pred_val).strip().lower()
+                    if pred_str in {'1', 'therapist', 't', 'true'}:
+                        return 'Therapist'
+                    if pred_str in {'0', 'patient', 'p', 'false'}:
+                        return 'Patient'
+                
+                return speaker_value or 'Unknown'
+            
             # Create simple list of transcript segments
             segments = []
             for idx, row in df.iterrows():
-                speaker = row.get('speaker', 'Unknown') if speaker_col else 'Unknown'
+                speaker = resolve_speaker(row)
                 text = row.get(text_col, '')
                 start_time = row.get('start', 0) if 'start' in df.columns else 0
                 end_time = row.get('end', 0) if 'end' in df.columns else 0
@@ -440,7 +492,7 @@ def register_clientside_callbacks(app):
         """,
         Output('waveform', 'data-wavesurfer'),
         Input('audio-player-container', 'children'),
-        State('transcript-data', 'data')
+        Input('transcript-data', 'data')
     )
     
     # Manual waveform initialization
