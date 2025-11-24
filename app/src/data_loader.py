@@ -23,44 +23,104 @@ def get_patient_sessions(patient_id):
     return []
 
 
-def load_uploaded_files(list_of_contents, list_of_filenames):
-    """Process uploaded files and return audio data, transcript data, and status messages"""
-    if not list_of_contents:
-        return None, None, ""
+def _map_pred_to_speaker(value):
+    """Convert classifier prediction to human readable speaker label."""
+    therapist_tokens = {'therapist', 't', '1', '1.0', 'true'}
+    patient_tokens = {'patient', 'p', '0', '0.0', 'false'}
     
-    audio_data = None
-    transcript_data = None
-    status_messages = []
+    if pd.isna(value):
+        return 'Unknown'
     
-    for content, filename in zip(list_of_contents, list_of_filenames):
-        content_type, content_string = content.split(',')
+    try:
+        numeric_value = float(value)
+        # Explicit mapping requested: 1 -> therapist, 0 -> patient
+        if numeric_value == 1:
+            return 'Therapist'
+        if numeric_value == 0:
+            return 'Patient'
+    except (TypeError, ValueError):
+        pass
+    
+    value_str = str(value).strip().lower()
+    
+    if value_str in therapist_tokens:
+        return 'Therapist'
+    if value_str in patient_tokens:
+        return 'Patient'
+    
+    # Fall back to boolean-ish interpretation
+    try:
+        numeric_value = float(value_str)
+        return 'Therapist' if numeric_value >= 0.5 else 'Patient'
+    except (TypeError, ValueError):
+        return 'Unknown'
+
+
+def _normalize_transcript_df(df):
+    """
+    Ensure transcripts always contain a speaker column so downstream UI
+    can reliably style regions and labels.
+    """
+    if df is None or df.empty:
+        return df
+    
+    normalized_df = df.copy()
+    
+    if 'speaker' in normalized_df.columns:
+        normalized_df['speaker'] = normalized_df['speaker'].fillna('Unknown')
+        return normalized_df
+    
+    if 'pred' in normalized_df.columns:
+        normalized_df['speaker'] = normalized_df['pred'].apply(_map_pred_to_speaker)
+        return normalized_df
+    
+    normalized_df['speaker'] = 'Unknown'
+    return normalized_df
+
+
+def process_audio_upload(content, filename):
+    """Validate and serialize uploaded audio content."""
+    if not content or not filename:
+        return None, ""
+    
+    if not filename.lower().endswith(('.mp3', '.wav')):
+        return None, f"⚠️ Unsupported audio file: {filename}"
+    
+    try:
+        _, content_string = content.split(',', 1)
+    except ValueError:
+        return None, f"❌ Could not read audio file: {filename}"
+    
+    audio_data = {
+        'content': content_string,
+        'filename': filename,
+        'type': 'uploaded'
+    }
+    return audio_data, f"✅ Audio loaded: {filename}"
+
+
+def process_transcript_upload(content, filename):
+    """Validate, parse, and serialize an uploaded transcript."""
+    if not content or not filename:
+        return None, ""
+    
+    if not filename.lower().endswith(('.xlsx', '.csv')):
+        return None, f"⚠️ Unsupported transcript file: {filename}"
+    
+    try:
+        _, content_string = content.split(',', 1)
+        decoded = base64.b64decode(content_string)
         
-        # Check if it's an audio file
-        if filename.endswith('.mp3') or filename.endswith('.wav'):
-            audio_data = {
-                'content': content_string,
-                'filename': filename,
-                'type': 'uploaded'
-            }
-            status_messages.append(f"✅ Audio loaded: {filename}")
-        
-        # Check if it's a transcript file
-        elif filename.endswith('.xlsx') or filename.endswith('.csv'):
-            decoded = base64.b64decode(content_string)
-            try:
-                if filename.endswith('.csv'):
-                    df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-                else:
-                    df = pd.read_excel(io.BytesIO(decoded), engine='openpyxl')
-                
-                transcript_data = df.to_json(date_format='iso', orient='split')
-                status_messages.append(f"✅ Transcript loaded: {filename} ({len(df)} segments)")
-            except Exception as e:
-                status_messages.append(f"❌ Error loading {filename}: {str(e)}")
+        if filename.lower().endswith('.csv'):
+            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
         else:
-            status_messages.append(f"⚠️ Unsupported file: {filename}")
-    
-    return audio_data, transcript_data, status_messages
+            df = pd.read_excel(io.BytesIO(decoded), engine='openpyxl')
+        
+        df = _normalize_transcript_df(df)
+        transcript_json = df.to_json(date_format='iso', orient='split')
+        return transcript_json, f"✅ Transcript loaded: {filename} ({len(df)} segments)"
+    except Exception as e:
+        return None, f"❌ Error loading {filename}: {str(e)}"
 
 
 def load_session_from_disk(patient_id, session_idx):
@@ -83,6 +143,7 @@ def load_session_from_disk(patient_id, session_idx):
         else:
             df = pd.read_excel(transcript_file, engine='openpyxl')
         
+        df = _normalize_transcript_df(df)
         transcript_data = df.to_json(date_format='iso', orient='split')
         
         # Load audio

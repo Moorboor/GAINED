@@ -10,34 +10,63 @@ def create_upload_section():
     return html.Div([
         html.H2("Upload Session Files"),
         html.Div([
-            html.Label("📁 Upload Audio (MP3) and/or Transcript (XLSX/CSV):"),
-            dcc.Upload(
-                id='upload-files',
-                children=html.Div([
-                    html.Div('🎵 Audio (MP3) + 📄 Transcript (XLSX/CSV)', 
-                             style={'fontSize': '18px', 'fontWeight': 'bold', 'marginBottom': '5px'}),
-                    html.Div('Drag and Drop Files Here or Click to Select', 
-                             style={'fontSize': '14px', 'color': '#6c757d'}),
-                    html.Div('You can upload both files at once or one at a time', 
-                             style={'fontSize': '12px', 'color': '#adb5bd', 'marginTop': '5px'})
-                ]),
-                style={
-                    'width': '100%',
-                    'height': '100px',
-                    'lineHeight': '30px',
-                    'borderWidth': '3px',
-                    'borderStyle': 'dashed',
-                    'borderRadius': '10px',
-                    'textAlign': 'center',
-                    'margin': '10px 0',
-                    'backgroundColor': '#f8f9fa',
-                    'display': 'flex',
-                    'alignItems': 'center',
-                    'justifyContent': 'center',
-                    'borderColor': '#007bff'
-                },
-                multiple=True
-            ),
+            html.Label("📁 Upload Audio (MP3/WAV) and Transcript (XLSX/CSV) separately:"),
+            html.Div([
+                html.Div([
+                    html.Div('🎵 Audio File', style={'fontSize': '16px', 'fontWeight': 'bold', 'marginBottom': '5px'}),
+                    dcc.Upload(
+                        id='upload-audio',
+                        children=html.Div([
+                            html.Div('Drop MP3/WAV here', style={'fontSize': '14px', 'color': '#6c757d'}),
+                            html.Div('or click to browse', style={'fontSize': '12px', 'color': '#adb5bd', 'marginTop': '5px'})
+                        ]),
+                        style={
+                            'width': '100%',
+                            'height': '100px',
+                            'lineHeight': '30px',
+                            'borderWidth': '3px',
+                            'borderStyle': 'dashed',
+                            'borderRadius': '10px',
+                            'textAlign': 'center',
+                            'margin': '10px 0',
+                            'backgroundColor': '#f8f9fa',
+                            'display': 'flex',
+                            'alignItems': 'center',
+                            'justifyContent': 'center',
+                            'borderColor': '#007bff'
+                        },
+                        multiple=False,
+                        accept='.mp3,.wav'
+                    ),
+                ], style={'flex': '1', 'minWidth': '250px', 'marginRight': '10px'}),
+                html.Div([
+                    html.Div('📄 Transcript File', style={'fontSize': '16px', 'fontWeight': 'bold', 'marginBottom': '5px'}),
+                    dcc.Upload(
+                        id='upload-transcript',
+                        children=html.Div([
+                            html.Div('Drop XLSX/CSV here', style={'fontSize': '14px', 'color': '#6c757d'}),
+                            html.Div('or click to browse', style={'fontSize': '12px', 'color': '#adb5bd', 'marginTop': '5px'})
+                        ]),
+                        style={
+                            'width': '100%',
+                            'height': '100px',
+                            'lineHeight': '30px',
+                            'borderWidth': '3px',
+                            'borderStyle': 'dashed',
+                            'borderRadius': '10px',
+                            'textAlign': 'center',
+                            'margin': '10px 0',
+                            'backgroundColor': '#f8f9fa',
+                            'display': 'flex',
+                            'alignItems': 'center',
+                            'justifyContent': 'center',
+                            'borderColor': '#17a2b8'
+                        },
+                        multiple=False,
+                        accept='.xlsx,.csv'
+                    ),
+                ], style={'flex': '1', 'minWidth': '250px', 'marginLeft': '10px'}),
+            ], style={'display': 'flex', 'flexWrap': 'wrap', 'justifyContent': 'space-between'}),
             html.Div(id='upload-status', style={'marginTop': '10px', 'fontSize': '14px'})
         ]),
     ], style={'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px', 'marginBottom': '20px', 
