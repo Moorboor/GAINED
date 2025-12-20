@@ -139,6 +139,23 @@ def create_metrics_section():
                                   'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'none'})
 
 
+def create_pie_chart_section():
+    """Create the pie chart section for patient speech-turn fields"""
+    return html.Div([
+        html.H2("Patient Speech-Turn Analysis", style={'marginBottom': '20px'}),
+        html.Div([
+            html.Label("Select field to visualize:", style={'fontSize': '14px', 'fontWeight': 'bold', 'marginBottom': '10px'}),
+            dcc.Dropdown(
+                id='pie-chart-field-selector',
+                placeholder="Select a categorical field (e.g., emotion, sentiment)...",
+                style={'marginBottom': '20px'}
+            ),
+        ]),
+        dcc.Graph(id='pie-chart')
+    ], id='pie-chart-section', style={'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px', 
+                                      'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'none'})
+
+
 def create_layout():
     """Create the main application layout"""
     return html.Div([
@@ -148,6 +165,7 @@ def create_layout():
         create_audio_section(),
         create_transcript_section(),
         create_metrics_section(),
+        create_pie_chart_section(),
         
         # Hidden divs to store data
         dcc.Store(id='audio-data'),

@@ -5,6 +5,7 @@ from dash import html, Input, Output, State, callback, no_update, clientside_cal
 import pandas as pd
 import io
 import plotly.graph_objects as go
+import plotly.express as px
 import dash
 from dash.exceptions import PreventUpdate
 from .data_loader import (
@@ -328,6 +329,194 @@ def register_callbacks(app):
         except Exception as e:
             print(f"Error creating chart: {e}")
             return go.Figure()
+    
+    
+    # Update pie chart field selector dropdown
+    @callback(
+        Output('pie-chart-field-selector', 'options'),
+        Output('pie-chart-field-selector', 'value'),
+        Input('transcript-data', 'data')
+    )
+    def update_pie_chart_field_selector(transcript_data):
+        if not transcript_data:
+            return [], None
+        
+        try:
+            df = pd.read_json(io.StringIO(transcript_data), orient='split')
+            
+            # Find patient speech-turnvised fields (fields ending with _P)
+            # These are fields that have separate values for patient speech turns
+            patient_fields = []
+            excluded_cols = {'segment_id', 'index', 'start', 'end', 'text', 'segment_text', 'speaker', 'pred', 'speaker_text', 'num_words', 'words', 'wespeaker_div'}
+            
+            for col in df.columns:
+                col_lower = col.lower()
+                # Skip excluded columns
+                if col_lower in excluded_cols:
+                    continue
+                
+                # Look for fields ending with _P (patient-specific speech-turnvised fields)
+                if col.endswith('_P') or col.endswith('_p'):
+                    patient_fields.append(col)
+                # Also include categorical fields that might be emotion-related
+                elif df[col].dtype == 'object':
+                    # String columns that might be categorical
+                    if any(keyword in col_lower for keyword in ['emotion', 'sentiment', 'feeling', 'mood', 'affect']):
+                        patient_fields.insert(0, col)  # Prioritize emotion fields
+                    elif col_lower not in excluded_cols:
+                        # Other string columns (but we'll filter for patient turns when displaying)
+                        pass
+            
+            # If no _P fields found, look for any numeric fields that could be binned
+            if not patient_fields:
+                for col in df.columns:
+                    if col.lower() in excluded_cols:
+                        continue
+                    if df[col].dtype in ['int64', 'float64']:
+                        # Low-cardinality numeric might be categorical
+                        unique_count = df[col].nunique()
+                        total_count = len(df[col].dropna())
+                        if unique_count < 20 and unique_count < total_count * 0.9:
+                            patient_fields.append(col)
+            
+            options = [{'label': col, 'value': col} for col in patient_fields]
+            
+            # Auto-select first field if available
+            value = patient_fields[0] if patient_fields else None
+            
+            return options, value
+        
+        except Exception as e:
+            print(f"Error updating field selector: {e}")
+            return [], None
+    
+    
+    # Generate pie chart for patient speech-turn fields
+    @callback(
+        Output('pie-chart', 'figure'),
+        Input('pie-chart-field-selector', 'value'),
+        Input('transcript-data', 'data')
+    )
+    def generate_pie_chart(selected_field, transcript_data):
+        if not transcript_data or not selected_field:
+            return go.Figure()
+        
+        try:
+            df = pd.read_json(io.StringIO(transcript_data), orient='split')
+            
+            # Filter for patient speech turns only
+            # Check for speaker_text column (contains "P:" for patient, "T:" for therapist)
+            # or speaker column
+            patient_df = None
+            if 'speaker_text' in df.columns:
+                # Filter rows where speaker_text contains "P:"
+                patient_df = df[df['speaker_text'].astype(str).str.contains('^P:', case=False, na=False, regex=True)].copy()
+            elif 'speaker' in df.columns:
+                # Filter for patient speech turns
+                def is_patient(value):
+                    if pd.isna(value):
+                        return False
+                    value_str = str(value).strip().lower()
+                    return 'patient' in value_str or value_str.startswith('p')
+                
+                patient_df = df[df['speaker'].apply(is_patient)].copy()
+            else:
+                # If no speaker column, use all data (assume all are patient turns)
+                patient_df = df.copy()
+            
+            if patient_df.empty or selected_field not in patient_df.columns:
+                return go.Figure()
+            
+            # Get field data
+            field_data = patient_df[selected_field].dropna()
+            
+            if field_data.empty:
+                return go.Figure()
+            
+            # Handle numeric fields by binning them
+            if field_data.dtype in ['int64', 'float64']:
+                # For numeric fields, create bins
+                if field_data.min() == field_data.max():
+                    # All values are the same, just use the value
+                    value_counts = pd.Series([len(field_data)], index=[f'{field_data.iloc[0]:.3f}'])
+                else:
+                    # Create bins: use quantiles for better distribution
+                    try:
+                        # Try to create 5-10 bins based on data distribution
+                        n_bins = min(10, max(5, int(len(field_data) / 10)))
+                        if n_bins < 2:
+                            n_bins = 2
+                        
+                        # Use quantile-based bins for better visualization
+                        bins = pd.qcut(field_data, q=n_bins, duplicates='drop', precision=2)
+                        value_counts = bins.value_counts().sort_index()
+                        # Format bin labels
+                        value_counts.index = [str(interval) for interval in value_counts.index]
+                    except (ValueError, TypeError):
+                        # Fallback to equal-width bins
+                        bins = pd.cut(field_data, bins=min(10, field_data.nunique()), precision=2, duplicates='drop')
+                        value_counts = bins.value_counts().sort_index()
+                        value_counts.index = [str(interval) for interval in value_counts.index]
+            else:
+                # Categorical/string fields - use value counts directly
+                value_counts = field_data.value_counts()
+            
+            # Create pie chart
+            fig = go.Figure(data=[go.Pie(
+                labels=value_counts.index.astype(str),
+                values=value_counts.values,
+                hole=0.4,  # Creates a donut chart
+                textinfo='label+percent',
+                textposition='outside',
+                marker=dict(
+                    colors=px.colors.qualitative.Set3,
+                    line=dict(color='#FFFFFF', width=2)
+                ),
+                hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+            )])
+            
+            fig.update_layout(
+                title=f'Distribution of {selected_field} in Patient Speech Turns',
+                template='plotly_white',
+                height=500,
+                showlegend=True,
+                legend=dict(
+                    orientation="v",
+                    yanchor="middle",
+                    y=0.5,
+                    xanchor="left",
+                    x=1.05
+                ),
+                annotations=[dict(
+                    text=f'Total<br>Patient Turns<br>{len(field_data)}',
+                    x=0.5, y=0.5,
+                    font_size=16,
+                    showarrow=False
+                )]
+            )
+            
+            return fig
+        
+        except Exception as e:
+            print(f"Error creating pie chart: {e}")
+            import traceback
+            traceback.print_exc()
+            return go.Figure()
+    
+    
+    # Show/hide pie chart section when transcript data is available
+    @callback(
+        Output('pie-chart-section', 'style'),
+        Input('transcript-data', 'data')
+    )
+    def update_pie_chart_section_visibility(transcript_data):
+        visible_style = {
+            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
+            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
+        }
+        hidden_style = {'display': 'none'}
+        
+        return visible_style if transcript_data else hidden_style
 
 
 def register_clientside_callbacks(app):
