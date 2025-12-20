@@ -156,6 +156,28 @@ def create_pie_chart_section():
                                       'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'none'})
 
 
+def create_field_plots_section():
+    """Create the field plots section with rationale display"""
+    return html.Div([
+        html.H2("Field Analysis with Rationale", style={'marginBottom': '20px'}),
+        html.Div([
+            html.Label("Select up to 4 fields to plot:", style={'fontSize': '14px', 'fontWeight': 'bold', 'marginBottom': '10px'}),
+            dcc.Dropdown(
+                id='field-plots-selector',
+                placeholder="Select fields to visualize (up to 4)...",
+                multi=True,
+                maxHeight=200,
+                style={'marginBottom': '20px'}
+            ),
+        ]),
+        html.Div(id='field-plots-container', children=[
+            html.Div("Select fields above to display plots with rationale", 
+                    style={'textAlign': 'center', 'color': '#6c757d', 'padding': '40px'})
+        ])
+    ], id='field-plots-section', style={'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px', 
+                                       'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'none'})
+
+
 def create_layout():
     """Create the main application layout"""
     return html.Div([
@@ -166,10 +188,12 @@ def create_layout():
         create_transcript_section(),
         create_metrics_section(),
         create_pie_chart_section(),
+        create_field_plots_section(),
         
         # Hidden divs to store data
         dcc.Store(id='audio-data'),
         dcc.Store(id='transcript-data'),
+        dcc.Store(id='rationale-data', data={}),
         dcc.Store(id='current-time', data=0),
         dcc.Interval(id='playback-interval', interval=100, disabled=False),
         

@@ -1,7 +1,7 @@
 """
 Callbacks for GAINED application
 """
-from dash import html, Input, Output, State, callback, no_update, clientside_callback
+from dash import html, dcc, Input, Output, State, callback, no_update, clientside_callback
 import pandas as pd
 import io
 import plotly.graph_objects as go
@@ -11,9 +11,11 @@ from dash.exceptions import PreventUpdate
 from .data_loader import (
     get_patient_sessions, 
     load_session_from_disk,
+    load_session_with_rationale,
     encode_audio_to_base64,
     process_audio_upload,
-    process_transcript_upload
+    process_transcript_upload,
+    process_transcript_upload_with_rationale
 )
 
 
@@ -33,6 +35,7 @@ def register_callbacks(app):
     @callback(
         [Output('audio-data', 'data'),
          Output('transcript-data', 'data'),
+         Output('rationale-data', 'data'),
          Output('upload-status', 'children')],
         [Input('upload-audio', 'contents'),
          Input('upload-transcript', 'contents')],
@@ -50,6 +53,7 @@ def register_callbacks(app):
         
         audio_output = no_update
         transcript_output = no_update
+        rationale_output = no_update
         status_messages = []
         
         if triggered_id == 'upload-audio' and audio_content and audio_filename:
@@ -59,9 +63,14 @@ def register_callbacks(app):
             if audio_msg:
                 status_messages.append(audio_msg)
         elif triggered_id == 'upload-transcript' and transcript_content and transcript_filename:
-            new_transcript_data, transcript_msg = process_transcript_upload(transcript_content, transcript_filename)
+            # Use the new function that also loads rationale
+            new_transcript_data, new_rationale_data, transcript_msg = process_transcript_upload_with_rationale(
+                transcript_content, transcript_filename
+            )
             if new_transcript_data:
                 transcript_output = new_transcript_data
+            if new_rationale_data:
+                rationale_output = new_rationale_data
             if transcript_msg:
                 status_messages.append(transcript_msg)
         else:
@@ -75,13 +84,14 @@ def register_callbacks(app):
                 }) for msg in status_messages
             ])
         
-        return audio_output, transcript_output, status_div
+        return audio_output, transcript_output, rationale_output, status_div
     
     
     # Load existing session data
     @callback(
         [Output('audio-data', 'data', allow_duplicate=True),
          Output('transcript-data', 'data', allow_duplicate=True),
+         Output('rationale-data', 'data', allow_duplicate=True),
          Output('audio-section', 'style'),
          Output('transcript-section', 'style'),
          Output('chart-section', 'style')],
@@ -99,10 +109,14 @@ def register_callbacks(app):
             'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
         }
         
-        audio_data, transcript_data = load_session_from_disk(patient_id, session_idx)
+        # Load with rationale support
+        transcript_data, rationale_data = load_session_with_rationale(patient_id, session_idx)
+        
+        # Load audio separately (using old function for now)
+        audio_data, _ = load_session_from_disk(patient_id, session_idx)
         
         if audio_data or transcript_data:
-            return audio_data, transcript_data, visible_style, visible_style, visible_style
+            return audio_data, transcript_data, rationale_data, visible_style, visible_style, visible_style
         
         raise PreventUpdate
     
@@ -510,6 +524,181 @@ def register_callbacks(app):
         Input('transcript-data', 'data')
     )
     def update_pie_chart_section_visibility(transcript_data):
+        visible_style = {
+            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
+            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
+        }
+        hidden_style = {'display': 'none'}
+        
+        return visible_style if transcript_data else hidden_style
+    
+    
+    # Update field plots selector dropdown
+    @callback(
+        Output('field-plots-selector', 'options'),
+        Input('transcript-data', 'data')
+    )
+    def update_field_plots_selector(transcript_data):
+        if not transcript_data:
+            return []
+        
+        try:
+            df = pd.read_json(io.StringIO(transcript_data), orient='split')
+            
+            # Find numeric fields that can be plotted
+            excluded_cols = {'segment_id', 'index', 'start', 'end'}
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            plotable_fields = [col for col in numeric_cols if col.lower() not in excluded_cols]
+            
+            options = [{'label': col, 'value': col} for col in plotable_fields]
+            return options
+        
+        except Exception as e:
+            print(f"Error updating field plots selector: {e}")
+            return []
+    
+    
+    # Display field plots with rationale
+    @callback(
+        Output('field-plots-container', 'children'),
+        [Input('field-plots-selector', 'value'),
+         Input('transcript-data', 'data'),
+         Input('rationale-data', 'data')]
+    )
+    def display_field_plots(selected_fields, transcript_data, rationale_data):
+        if not transcript_data or not selected_fields:
+            return html.Div("Select fields above to display plots with rationale", 
+                          style={'textAlign': 'center', 'color': '#6c757d', 'padding': '40px'})
+        
+        # Limit to 4 fields
+        selected_fields = selected_fields[:4] if isinstance(selected_fields, list) else [selected_fields]
+        
+        try:
+            df = pd.read_json(io.StringIO(transcript_data), orient='split')
+            
+            # Parse rationale data if available
+            rationale_dict = {}
+            if rationale_data:
+                for col_name, rationale_json in rationale_data.items():
+                    try:
+                        rationale_df = pd.read_json(io.StringIO(rationale_json), orient='split')
+                        rationale_dict[col_name] = rationale_df
+                    except Exception as e:
+                        print(f"Error parsing rationale for {col_name}: {e}")
+            
+            # Determine x-axis
+            if 'segment_id' in df.columns:
+                x_data = df['segment_id']
+                x_label = 'Segment'
+            else:
+                x_data = df.index
+                x_label = 'Index'
+            
+            # Create plots for each selected field
+            plot_components = []
+            for field in selected_fields:
+                if field not in df.columns:
+                    continue
+                
+                # Create plot
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=x_data,
+                    y=df[field],
+                    mode='lines+markers',
+                    name=field,
+                    line=dict(width=2),
+                    marker=dict(size=6)
+                ))
+                
+                fig.update_layout(
+                    title=field,
+                    xaxis_title=x_label,
+                    yaxis_title='Value',
+                    hovermode='x unified',
+                    template='plotly_white',
+                    height=350,
+                    margin=dict(l=50, r=50, t=50, b=50)
+                )
+                
+                # Get rationale for this field if available
+                rationale_text = None
+                if field in rationale_dict:
+                    rationale_df = rationale_dict[field]
+                    
+                    # If the rationale sheet has the same column name, use that column
+                    if field in rationale_df.columns:
+                        # Get non-null values from the rationale column
+                        rationale_values = rationale_df[field].dropna().astype(str).tolist()
+                        if rationale_values:
+                            # Join with line breaks if multiple values
+                            rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                    else:
+                        # Try to find a text/description column in rationale
+                        text_cols = [col for col in rationale_df.columns 
+                                   if any(keyword in col.lower() for keyword in ['text', 'description', 'rationale', 'reason', 'explanation'])]
+                        if text_cols:
+                            # Combine all rationale text
+                            rationale_values = rationale_df[text_cols[0]].dropna().astype(str).tolist()
+                            if rationale_values:
+                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                        elif len(rationale_df.columns) > 0:
+                            # Use first column if no obvious text column
+                            rationale_values = rationale_df.iloc[:, 0].dropna().astype(str).tolist()
+                            if rationale_values:
+                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                
+                # Create component for this field
+                field_component = html.Div([
+                    dcc.Graph(figure=fig, id={'type': 'field-plot', 'field': field}),
+                    html.Div([
+                        html.H4("Rationale", style={'fontSize': '16px', 'fontWeight': 'bold', 'marginBottom': '10px', 'color': '#495057'}),
+                        html.Div(
+                            rationale_text if rationale_text else "No rationale available for this field",
+                            style={
+                                'padding': '15px',
+                                'backgroundColor': '#f8f9fa',
+                                'borderRadius': '5px',
+                                'borderLeft': '4px solid #007bff',
+                                'fontSize': '14px',
+                                'lineHeight': '1.6',
+                                'color': '#495057' if rationale_text else '#6c757d',
+                                'fontStyle': 'italic' if not rationale_text else 'normal',
+                                'whiteSpace': 'pre-line'  # Preserve line breaks
+                            }
+                        )
+                    ], style={'marginTop': '15px', 'marginBottom': '30px'})
+                ], style={
+                    'marginBottom': '40px',
+                    'padding': '20px',
+                    'backgroundColor': '#ffffff',
+                    'borderRadius': '8px',
+                    'border': '1px solid #dee2e6',
+                    'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
+                })
+                
+                plot_components.append(field_component)
+            
+            if not plot_components:
+                return html.Div("No valid fields selected", 
+                              style={'textAlign': 'center', 'color': '#6c757d', 'padding': '40px'})
+            
+            return plot_components
+        
+        except Exception as e:
+            print(f"Error creating field plots: {e}")
+            import traceback
+            traceback.print_exc()
+            return html.Div(f"Error displaying plots: {str(e)}", 
+                          style={'textAlign': 'center', 'color': '#dc3545', 'padding': '40px'})
+    
+    
+    # Show/hide field plots section when transcript data is available
+    @callback(
+        Output('field-plots-section', 'style'),
+        Input('transcript-data', 'data')
+    )
+    def update_field_plots_section_visibility(transcript_data):
         visible_style = {
             'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
             'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
