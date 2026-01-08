@@ -14,7 +14,8 @@ external_scripts = [
 ]
 
 app = Dash(
-    __name__, 
+    __name__,
+    title='GAINED',
     suppress_callback_exceptions=True,
     external_scripts=external_scripts,
     assets_folder='assets'
