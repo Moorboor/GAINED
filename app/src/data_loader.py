@@ -1,10 +1,14 @@
 """
 Data loading utilities for GAINED application
 """
+import logging
 import os
 import base64
 import io
+
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 # Paths
 ABS_PATH = os.path.abspath("")
@@ -161,8 +165,8 @@ def load_session_from_disk(patient_id, session_idx):
         
         return None, transcript_data
         
-    except Exception as e:
-        print(f"Error loading session: {e}")
+    except Exception:
+        logger.exception("Error loading session")
         return None, None
 
 
@@ -181,12 +185,12 @@ def encode_audio_to_base64(audio_data):
                 audio_bytes = f.read()
                 audio_b64 = base64.b64encode(audio_bytes).decode()
                 return f"data:audio/mp3;base64,{audio_b64}"
-        except Exception as e:
-            print(f"Error loading audio: {e}")
+        except Exception:
+            logger.exception("Error loading audio")
             return ""
 
 
-def load_xlsx_with_sheets(file_path_or_buffer, is_buffer=False):
+def load_xlsx_with_sheets(file_path_or_buffer):
     """
     Load xlsx file and return main sheet data and rationale sheets.
     
@@ -196,10 +200,7 @@ def load_xlsx_with_sheets(file_path_or_buffer, is_buffer=False):
             - rationale_dict: Dictionary mapping column names to their rationale DataFrames
     """
     try:
-        if is_buffer:
-            xl_file = pd.ExcelFile(file_path_or_buffer, engine='openpyxl')
-        else:
-            xl_file = pd.ExcelFile(file_path_or_buffer, engine='openpyxl')
+        xl_file = pd.ExcelFile(file_path_or_buffer, engine='openpyxl')
         
         sheet_names = xl_file.sheet_names
         
@@ -224,10 +225,35 @@ def load_xlsx_with_sheets(file_path_or_buffer, is_buffer=False):
         if rationale_sheet_name:
             # Load rationale sheet and match columns
             rationale_df = pd.read_excel(xl_file, sheet_name=rationale_sheet_name, engine='openpyxl')
+            
+            # Preserve segment_id or index if present for matching
+            key_cols = []
+            if 'segment_id' in rationale_df.columns:
+                key_cols.append('segment_id')
+            if 'index' in rationale_df.columns:
+                key_cols.append('index')
+            
             for col in main_columns:
                 if col in rationale_df.columns:
-                    # Extract just this column's rationale data
-                    rationale_dict[col] = rationale_df[[col]].copy()
+                    # Extract this column's rationale data plus key columns
+                    cols_to_keep = key_cols + [col]
+                    rationale_dict[col] = rationale_df[cols_to_keep].copy()
+                elif 'data' in rationale_df.columns:
+                    # Check if there's a column name column that matches
+                    # Look for a column that might indicate which field this rationale is for
+                    name_cols = [c for c in rationale_df.columns if any(kw in c.lower() for kw in ['name', 'field', 'column', 'metric'])]
+                    if name_cols:
+                        # Filter rows where the name column matches the main column
+                        matching_rows = rationale_df[rationale_df[name_cols[0]].astype(str).str.lower() == col.lower()]
+                        if not matching_rows.empty:
+                            # Use the 'data' column for rationale plus key columns
+                            cols_to_keep = key_cols + ['data']
+                            rationale_dict[col] = matching_rows[cols_to_keep].copy()
+                    else:
+                        # If no name column, assume all rows are for this column if it's the only one
+                        if len(main_columns) == 1 or col == list(main_columns)[0]:
+                            cols_to_keep = key_cols + ['data']
+                            rationale_dict[col] = rationale_df[cols_to_keep].copy()
         else:
             # Check if sheet name matches a column name (case-insensitive)
             for sheet_name in sheet_names[1:]:  # Skip first sheet (main)
@@ -242,12 +268,26 @@ def load_xlsx_with_sheets(file_path_or_buffer, is_buffer=False):
                 if matching_column:
                     # Load rationale sheet
                     rationale_df = pd.read_excel(xl_file, sheet_name=sheet_name, engine='openpyxl')
-                    rationale_dict[matching_column] = rationale_df
+                    
+                    # Preserve segment_id or index if present for matching
+                    key_cols = []
+                    if 'segment_id' in rationale_df.columns:
+                        key_cols.append('segment_id')
+                    if 'index' in rationale_df.columns:
+                        key_cols.append('index')
+                    
+                    # Check if there's a 'data' column, use it if available
+                    if 'data' in rationale_df.columns:
+                        cols_to_keep = key_cols + ['data']
+                        rationale_dict[matching_column] = rationale_df[cols_to_keep].copy()
+                    else:
+                        # Keep all columns including key columns
+                        rationale_dict[matching_column] = rationale_df
         
         return main_df, rationale_dict
     
-    except Exception as e:
-        print(f"Error loading xlsx with sheets: {e}")
+    except Exception:
+        logger.exception("Error loading xlsx with sheets")
         return None, {}
 
 
@@ -280,7 +320,7 @@ def load_session_with_rationale(patient_id, session_idx):
             return main_data, {}
         else:
             # XLSX file - load with sheets
-            main_df, rationale_dict = load_xlsx_with_sheets(transcript_file, is_buffer=False)
+            main_df, rationale_dict = load_xlsx_with_sheets(transcript_file)
             
             if main_df is None:
                 return None, {}
@@ -294,8 +334,8 @@ def load_session_with_rationale(patient_id, session_idx):
             
             return main_data, rationale_data_dict
     
-    except Exception as e:
-        print(f"Error loading session with rationale: {e}")
+    except Exception:
+        logger.exception("Error loading session with rationale")
         return None, {}
 
 
@@ -324,8 +364,7 @@ def process_transcript_upload_with_rationale(content, filename):
             return main_data, {}, f"✅ Transcript loaded: {filename} ({len(df)} segments)"
         else:
             # XLSX file - load with sheets
-            file_buffer = io.BytesIO(decoded)
-            main_df, rationale_dict = load_xlsx_with_sheets(file_buffer, is_buffer=True)
+            main_df, rationale_dict = load_xlsx_with_sheets(io.BytesIO(decoded))
             
             if main_df is None:
                 return None, {}, f"❌ Error loading {filename}: Could not read main sheet"
