@@ -1,22 +1,26 @@
 """
 Callbacks for GAINED application
 """
-from dash import html, dcc, Input, Output, State, callback, no_update, clientside_callback
-import pandas as pd
 import io
+import logging
+
+import dash
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-import dash
+from dash import html, dcc, Input, Output, State, callback, no_update
 from dash.exceptions import PreventUpdate
+
 from .data_loader import (
     get_patient_sessions, 
     load_session_from_disk,
     load_session_with_rationale,
     encode_audio_to_base64,
     process_audio_upload,
-    process_transcript_upload,
-    process_transcript_upload_with_rationale
+    process_transcript_upload_with_rationale,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def register_callbacks(app):
@@ -80,7 +84,7 @@ def register_callbacks(app):
         if status_messages:
             status_div = html.Div([
                 html.Div(msg, style={
-                    'color': '#28a745' if '✅' in msg else '#dc3545' if '❌' in msg else '#ffc107'
+                    'color': '#059669' if '✅' in msg else '#dc2626' if '❌' in msg else '#d97706'
                 }) for msg in status_messages
             ])
         
@@ -152,24 +156,24 @@ def register_callbacks(app):
     def display_audio_player(audio_data):
         if not audio_data:
             return html.Div("No audio loaded", style={
-                'color': '#6c757d', 'textAlign': 'center', 'padding': '20px'
+                'color': '#9ca3af', 'textAlign': 'center', 'padding': '20px', 'fontSize': '13px'
             })
         
         audio_src = encode_audio_to_base64(audio_data)
         
         return html.Div([
-            html.P(f"✅ Audio loaded: {audio_data.get('filename', 'Unknown')}", 
-                   style={'color': '#28a745', 'marginBottom': '15px', 'fontWeight': 'bold'}),
+            html.P(f"Audio loaded: {audio_data.get('filename', 'Unknown')}", 
+                   style={'color': '#059669', 'marginBottom': '12px', 'fontWeight': '500', 'fontSize': '13px'}),
             html.Audio(
                 id='audio-element',
                 src=audio_src,
                 controls=True,
                 autoPlay=False,
                 preload='auto',
-                style={'width': '100%', 'marginBottom': '15px'}
+                style={'width': '100%', 'marginBottom': '12px'}
             ),
-            html.P("📊 Waveform visualization below:", 
-                   style={'color': '#6c757d', 'fontSize': '14px', 'marginBottom': '5px'}),
+            html.P("Waveform visualization below", 
+                   style={'color': '#9ca3af', 'fontSize': '12px', 'marginBottom': '4px'}),
         ])
     
     
@@ -230,42 +234,41 @@ def register_callbacks(app):
                 # Determine if therapist or patient
                 is_therapist = 'therapist' in speaker.lower()
                 
-                # Simple row style - all segments stacked vertically
+                # Segment styling
+                therapist_color = '#2563eb'
+                patient_color = '#059669'
+                segment_color = therapist_color if is_therapist else patient_color
+                
                 segment_style = {
                     'padding': '12px',
                     'marginBottom': '8px',
-                    'borderRadius': '8px',
+                    'borderRadius': '6px',
                     'cursor': 'pointer',
-                    'transition': 'all 0.2s ease',
-                    'borderLeft': f'4px solid {"#1976d2" if is_therapist else "#2e7d32"}',
+                    'transition': 'all 0.15s ease',
+                    'borderLeft': f'3px solid {segment_color}',
                     'backgroundColor': '#ffffff',
-                    'boxShadow': '0 1px 3px rgba(0,0,0,0.1)',
-                }
-                
-                # Hover effect via class
-                segment_style_hover = {
-                    **segment_style,
-                    'backgroundColor': '#f5f5f5',
+                    'boxShadow': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                 }
                 
                 segment = html.Div([
                     html.Div([
                         html.Span(speaker, style={
-                            'fontSize': '12px',
-                            'fontWeight': 'bold',
-                            'color': '#1976d2' if is_therapist else '#2e7d32',
+                            'fontSize': '11px',
+                            'fontWeight': '600',
+                            'color': segment_color,
                             'textTransform': 'uppercase',
+                            'letterSpacing': '0.025em',
                             'marginRight': '12px'
                         }),
-                        html.Span(f"{start_time:.1f}s - {end_time:.1f}s", style={
+                        html.Span(f"{start_time:.1f}s – {end_time:.1f}s", style={
                             'fontSize': '11px',
-                            'color': '#999',
+                            'color': '#9ca3af',
                         })
                     ], style={'marginBottom': '6px'}),
                     html.Div(text, style={
-                        'fontSize': '14px',
-                        'lineHeight': '1.5',
-                        'color': '#333'
+                        'fontSize': '13px',
+                        'lineHeight': '1.6',
+                        'color': '#374151'
                     })
                 ],
                 id={'type': 'transcript-segment', 'index': idx},
@@ -279,7 +282,7 @@ def register_callbacks(app):
             return segments
         
         except Exception as e:
-            print(f"Error displaying transcript: {e}")
+            logger.exception("Error displaying transcript")
             return html.Div(f"Error loading transcript: {str(e)}")
     
     
@@ -341,7 +344,7 @@ def register_callbacks(app):
             return fig
         
         except Exception as e:
-            print(f"Error creating chart: {e}")
+            logger.exception("Error creating chart")
             return go.Figure()
     
     
@@ -401,7 +404,7 @@ def register_callbacks(app):
             return options, value
         
         except Exception as e:
-            print(f"Error updating field selector: {e}")
+            logger.exception("Error updating field selector")
             return [], None
     
     
@@ -512,9 +515,7 @@ def register_callbacks(app):
             return fig
         
         except Exception as e:
-            print(f"Error creating pie chart: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error creating pie chart")
             return go.Figure()
     
     
@@ -554,7 +555,7 @@ def register_callbacks(app):
             return options
         
         except Exception as e:
-            print(f"Error updating field plots selector: {e}")
+            logger.exception("Error updating field plots selector")
             return []
     
     
@@ -568,7 +569,7 @@ def register_callbacks(app):
     def display_field_plots(selected_fields, transcript_data, rationale_data):
         if not transcript_data or not selected_fields:
             return html.Div("Select fields above to display plots with rationale", 
-                          style={'textAlign': 'center', 'color': '#6c757d', 'padding': '40px'})
+                          style={'textAlign': 'center', 'color': '#9ca3af', 'padding': '40px'})
         
         # Limit to 4 fields
         selected_fields = selected_fields[:4] if isinstance(selected_fields, list) else [selected_fields]
@@ -583,8 +584,8 @@ def register_callbacks(app):
                     try:
                         rationale_df = pd.read_json(io.StringIO(rationale_json), orient='split')
                         rationale_dict[col_name] = rationale_df
-                    except Exception as e:
-                        print(f"Error parsing rationale for {col_name}: {e}")
+                    except Exception:
+                        logger.warning(f"Could not parse rationale for {col_name}")
             
             # Determine x-axis
             if 'segment_id' in df.columns:
@@ -600,7 +601,90 @@ def register_callbacks(app):
                 if field not in df.columns:
                     continue
                 
-                # Create plot
+                # Get rationale for this field if available (per row)
+                rationale_per_row = None
+                if field in rationale_dict:
+                    rationale_df = rationale_dict[field]
+                    
+                    # Try to match by segment_id or index if available
+                    match_key = None
+                    if 'segment_id' in df.columns and 'segment_id' in rationale_df.columns:
+                        match_key = 'segment_id'
+                    elif 'index' in rationale_df.columns:
+                        match_key = 'index'
+                    
+                    if match_key:
+                        # Merge rationale with main data by match key
+                        merged = df.merge(
+                            rationale_df[[match_key, 'data']] if 'data' in rationale_df.columns else rationale_df[[match_key, field]],
+                            on=match_key,
+                            how='left',
+                            suffixes=('', '_rationale')
+                        )
+                        rationale_col = 'data' if 'data' in merged.columns else field
+                        if rationale_col in merged.columns:
+                            rationale_per_row = merged[rationale_col].astype(str).tolist()
+                    else:
+                        # No match key, assume same order
+                        # Check for 'data' column first
+                        if 'data' in rationale_df.columns:
+                            rationale_per_row = rationale_df['data'].astype(str).tolist()
+                        elif field in rationale_df.columns:
+                            rationale_per_row = rationale_df[field].astype(str).tolist()
+                        else:
+                            # Use first column
+                            rationale_per_row = rationale_df.iloc[:, 0].astype(str).tolist()
+                        
+                        # Ensure same length as main data
+                        if len(rationale_per_row) != len(df):
+                            rationale_per_row = None
+                
+                # Prepare custom hover text with field information and rationale
+                hover_texts = []
+                for idx in range(len(df)):
+                    # Format the main field value
+                    field_value = df[field].iloc[idx]
+                    if pd.notna(field_value) and isinstance(field_value, (int, float)):
+                        hover_parts = [f"<b>{field}</b>: {field_value:.4f}"]
+                    else:
+                        hover_parts = [f"<b>{field}</b>: {field_value}"]
+                    
+                    # Add segment info if available
+                    if 'segment_id' in df.columns:
+                        hover_parts.append(f"<b>Segment</b>: {df['segment_id'].iloc[idx]}")
+                    if 'start' in df.columns and 'end' in df.columns:
+                        hover_parts.append(f"<b>Time</b>: {df['start'].iloc[idx]:.1f}s - {df['end'].iloc[idx]:.1f}s")
+                    
+                    # Add other relevant field information (e.g., emotions, speaker, etc.)
+                    info_fields = ['emotion', 'emotions', 'sentiment', 'speaker']
+                    for info_field in info_fields:
+                        if info_field in df.columns:
+                            value = df[info_field].iloc[idx]
+                            if pd.notna(value) and str(value).strip():
+                                hover_parts.append(f"<b>{info_field}</b>: {value}")
+                    
+                    # Add text preview (truncated)
+                    if 'text' in df.columns:
+                        text_value = df['text'].iloc[idx]
+                        if pd.notna(text_value) and str(text_value).strip():
+                            text_str = str(text_value)
+                            if len(text_str) > 100:
+                                text_str = text_str[:100] + "..."
+                            hover_parts.append(f"<b>Text</b>: {text_str}")
+                    
+                    # Add rationale if available
+                    if rationale_per_row and idx < len(rationale_per_row):
+                        rationale_val = rationale_per_row[idx]
+                        if pd.notna(rationale_val) and str(rationale_val).strip() and str(rationale_val).lower() != 'nan':
+                            rationale_str = str(rationale_val).strip()
+                            # Truncate long rationale in tooltip
+                            if len(rationale_str) > 200:
+                                rationale_str = rationale_str[:200] + "..."
+                            hover_parts.append(f"<br><b>Rationale</b>: {rationale_str}")
+                    
+                    hover_texts.append("<br>".join(hover_parts))
+                
+                # Create plot with enhanced tooltips
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(
                     x=x_data,
@@ -608,31 +692,41 @@ def register_callbacks(app):
                     mode='lines+markers',
                     name=field,
                     line=dict(width=2),
-                    marker=dict(size=6)
+                    marker=dict(size=6),
+                    hovertemplate='%{text}<extra></extra>',
+                    text=hover_texts
                 ))
                 
                 fig.update_layout(
                     title=field,
                     xaxis_title=x_label,
                     yaxis_title='Value',
-                    hovermode='x unified',
+                    hovermode='closest',
                     template='plotly_white',
                     height=350,
                     margin=dict(l=50, r=50, t=50, b=50)
                 )
                 
-                # Get rationale for this field if available
+                # Get rationale for this field if available (for display below plot)
                 rationale_text = None
                 if field in rationale_dict:
                     rationale_df = rationale_dict[field]
                     
-                    # If the rationale sheet has the same column name, use that column
-                    if field in rationale_df.columns:
+                    # Check for 'data' column first
+                    if 'data' in rationale_df.columns:
+                        rationale_values = rationale_df['data'].dropna().astype(str).tolist()
+                        if rationale_values:
+                            # Filter out 'nan' strings
+                            rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
+                            if rationale_values:
+                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                    elif field in rationale_df.columns:
                         # Get non-null values from the rationale column
                         rationale_values = rationale_df[field].dropna().astype(str).tolist()
                         if rationale_values:
-                            # Join with line breaks if multiple values
-                            rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                            rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
+                            if rationale_values:
+                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
                     else:
                         # Try to find a text/description column in rationale
                         text_cols = [col for col in rationale_df.columns 
@@ -641,56 +735,58 @@ def register_callbacks(app):
                             # Combine all rationale text
                             rationale_values = rationale_df[text_cols[0]].dropna().astype(str).tolist()
                             if rationale_values:
-                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                                rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
+                                if rationale_values:
+                                    rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
                         elif len(rationale_df.columns) > 0:
                             # Use first column if no obvious text column
                             rationale_values = rationale_df.iloc[:, 0].dropna().astype(str).tolist()
                             if rationale_values:
-                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
+                                rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
+                                if rationale_values:
+                                    rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
                 
                 # Create component for this field
                 field_component = html.Div([
                     dcc.Graph(figure=fig, id={'type': 'field-plot', 'field': field}),
                     html.Div([
-                        html.H4("Rationale", style={'fontSize': '16px', 'fontWeight': 'bold', 'marginBottom': '10px', 'color': '#495057'}),
+                        html.H4("Rationale", style={'fontSize': '13px', 'fontWeight': '600', 'marginBottom': '8px', 'color': '#374151'}),
                         html.Div(
                             rationale_text if rationale_text else "No rationale available for this field",
                             style={
-                                'padding': '15px',
-                                'backgroundColor': '#f8f9fa',
-                                'borderRadius': '5px',
-                                'borderLeft': '4px solid #007bff',
-                                'fontSize': '14px',
+                                'padding': '12px 16px',
+                                'backgroundColor': '#f9fafb',
+                                'borderRadius': '6px',
+                                'borderLeft': '3px solid #2563eb',
+                                'fontSize': '13px',
                                 'lineHeight': '1.6',
-                                'color': '#495057' if rationale_text else '#6c757d',
+                                'color': '#374151' if rationale_text else '#9ca3af',
                                 'fontStyle': 'italic' if not rationale_text else 'normal',
-                                'whiteSpace': 'pre-line'  # Preserve line breaks
+                                'whiteSpace': 'pre-line'
                             }
                         )
-                    ], style={'marginTop': '15px', 'marginBottom': '30px'})
+                    ], style={'marginTop': '12px', 'marginBottom': '24px'})
                 ], style={
-                    'marginBottom': '40px',
-                    'padding': '20px',
+                    'marginBottom': '24px',
+                    'padding': '16px',
                     'backgroundColor': '#ffffff',
                     'borderRadius': '8px',
-                    'border': '1px solid #dee2e6',
-                    'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
+                    'border': '1px solid #e5e7eb',
+                    'boxShadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
                 })
                 
                 plot_components.append(field_component)
             
             if not plot_components:
                 return html.Div("No valid fields selected", 
-                              style={'textAlign': 'center', 'color': '#6c757d', 'padding': '40px'})
+                              style={'textAlign': 'center', 'color': '#9ca3af', 'padding': '40px'})
             
             return plot_components
         
         except Exception as e:
-            print(f"Error creating field plots: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error creating field plots")
             return html.Div(f"Error displaying plots: {str(e)}", 
-                          style={'textAlign': 'center', 'color': '#dc3545', 'padding': '40px'})
+                          style={'textAlign': 'center', 'color': '#dc2626', 'padding': '40px', 'fontSize': '13px'})
     
     
     # Show/hide field plots section when transcript data is available
@@ -741,13 +837,13 @@ def register_clientside_callbacks(app):
                 }
                 
                 try {
-                    waveformDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #007bff;">⏳ Loading waveform...</p>';
+                    waveformDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #6b7280; font-size: 13px;">Loading waveform...</p>';
                     
                     window.wavesurfer = WaveSurfer.create({
                         container: '#waveform',
-                        waveColor: '#4a90e2',
-                        progressColor: '#1e5a9e',
-                        cursorColor: '#ff0000',
+                        waveColor: '#93c5fd',
+                        progressColor: '#2563eb',
+                        cursorColor: '#dc2626',
                         barWidth: 3,
                         barGap: 1,
                         barRadius: 2,
@@ -801,7 +897,7 @@ def register_clientside_callbacks(app):
                                         window.wsRegions.addRegion({
                                             start: start,
                                             end: end,
-                                            color: isTherapist ? 'rgba(25, 118, 210, 0.2)' : 'rgba(46, 125, 50, 0.2)',
+                                            color: isTherapist ? 'rgba(37, 99, 235, 0.15)' : 'rgba(5, 150, 105, 0.15)',
                                             drag: false,
                                             resize: false,
                                             content: speaker.split('_')[0].toUpperCase().substring(0, 1),
@@ -837,7 +933,7 @@ def register_clientside_callbacks(app):
                             var allSegments = document.querySelectorAll('[id*="transcript-segment"]');
                             allSegments.forEach(function(seg, segIdx) {
                                 if (segIdx === idx) {
-                                    seg.style.backgroundColor = '#e3f2fd';
+                                    seg.style.backgroundColor = '#dbeafe';
                                     seg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                                     seg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                                 } else {
@@ -899,7 +995,7 @@ def register_clientside_callbacks(app):
             }
             
             try {
-                waveformDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #007bff;">⏳ Creating waveform with speaker regions...</p>';
+                waveformDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #6b7280; font-size: 13px;">Creating waveform...</p>';
                 
                 // Create WaveSurfer with large visible bars
                 window.wavesurfer = WaveSurfer.create({
@@ -995,7 +1091,7 @@ def register_clientside_callbacks(app):
                         var allSegments = document.querySelectorAll('[id*="transcript-segment"]');
                         allSegments.forEach(function(seg, segIdx) {
                             if (segIdx === idx) {
-                                seg.style.backgroundColor = '#e3f2fd';
+                                seg.style.backgroundColor = '#dbeafe';
                                 seg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                                 seg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                             } else {
@@ -1164,7 +1260,7 @@ def register_clientside_callbacks(app):
                 var allSegments = document.querySelectorAll('[id*="transcript-segment"]');
                 allSegments.forEach(function(seg, idx) {
                     if (idx === clickedIndex) {
-                        seg.style.backgroundColor = '#e3f2fd';
+                        seg.style.backgroundColor = '#dbeafe';
                         seg.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                         seg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     } else {

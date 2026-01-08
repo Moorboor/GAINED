@@ -1,104 +1,331 @@
-/* GAINED Therapy Session Analysis - Custom Styles */
+/* GAINED Therapy Session Analysis - Professional Theme */
 
+/* ============================================
+   CSS Variables - Design System
+   ============================================ */
+:root {
+    /* Primary Colors */
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #dbeafe;
+    
+    /* Neutral Colors */
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    
+    /* Accent Colors */
+    --success: #059669;
+    --success-light: #d1fae5;
+    --warning: #d97706;
+    --error: #dc2626;
+    
+    /* Speaker Colors */
+    --therapist: #2563eb;
+    --therapist-light: #dbeafe;
+    --patient: #059669;
+    --patient-light: #d1fae5;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    
+    /* Spacing */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f0f2f5;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--gray-100);
+    color: var(--gray-800);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Transcript segments hover effect */
-.transcript-segment:hover {
-    background-color: #f5f5f5 !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
-    transform: translateX(3px);
+/* Remove global transition - only apply where needed */
+* {
+    transition: none;
 }
 
-.transcript-segment {
-    transition: all 0.2s ease;
+/* ============================================
+   Typography
+   ============================================ */
+h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    letter-spacing: -0.025em;
 }
 
-.transcript-segment:active {
-    transform: scale(0.98);
+h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: var(--space-4);
+    letter-spacing: -0.01em;
 }
 
-/* Waveform container */
-#waveform {
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--gray-700);
 }
 
-/* Button hover effects */
+label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-600);
+}
+
+/* ============================================
+   Cards / Sections
+   ============================================ */
+.dash-spreadsheet-container,
+[id$="-section"] {
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-200);
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+button {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
 button:hover {
-    opacity: 0.9;
+    opacity: 1;
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: var(--shadow-md);
 }
 
 button:active {
     transform: translateY(0);
+    box-shadow: var(--shadow-sm);
 }
 
-/* File upload areas hover */
-._dash-file-upload:hover {
-    border-color: #007bff !important;
-    background-color: #e7f3ff !important;
+button:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
-/* Dropdown styling */
+/* ============================================
+   Dropdowns
+   ============================================ */
 .Select-control {
-    border-radius: 5px !important;
+    border-radius: var(--radius) !important;
+    border-color: var(--gray-300) !important;
+    min-height: 40px !important;
 }
 
-/* Loading spinner */
-._dash-loading {
-    color: #007bff;
+.Select-control:hover {
+    border-color: var(--gray-400) !important;
 }
 
-/* Smooth transitions */
-* {
-    transition: all 0.2s ease-in-out;
+.Select.is-focused > .Select-control {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 1px var(--primary) !important;
 }
 
-/* Scrollbar styling */
+.Select-placeholder {
+    color: var(--gray-400) !important;
+    font-size: 0.875rem !important;
+}
+
+.Select-value-label {
+    font-size: 0.875rem !important;
+    color: var(--gray-700) !important;
+}
+
+.Select-menu-outer {
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow-md) !important;
+    border: 1px solid var(--gray-200) !important;
+    margin-top: var(--space-1) !important;
+}
+
+.Select-option {
+    font-size: 0.875rem !important;
+    padding: var(--space-2) var(--space-3) !important;
+}
+
+.Select-option.is-focused {
+    background-color: var(--gray-100) !important;
+}
+
+.Select-option.is-selected {
+    background-color: var(--primary-light) !important;
+    color: var(--primary-dark) !important;
+}
+
+/* ============================================
+   File Upload Areas
+   ============================================ */
+.dash-uploader,
+[id^="upload-"] {
+    transition: all 0.15s ease;
+}
+
+._dash-file-upload:hover,
+[id^="upload-"]:hover {
+    border-color: var(--primary) !important;
+    background-color: var(--primary-light) !important;
+}
+
+/* ============================================
+   Transcript Segments
+   ============================================ */
+.transcript-segment {
+    transition: all 0.15s ease;
+    border-radius: var(--radius);
+}
+
+.transcript-segment:hover {
+    background-color: var(--gray-50) !important;
+    box-shadow: var(--shadow) !important;
+    transform: translateX(2px);
+}
+
+.transcript-segment:active {
+    transform: scale(0.995);
+}
+
+[id*="transcript-segment"][data-active="true"] {
+    background-color: var(--primary-light) !important;
+    border-left-color: var(--primary) !important;
+}
+
+/* ============================================
+   Waveform
+   ============================================ */
+#waveform {
+    background-color: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+}
+
+/* ============================================
+   Charts / Plotly
+   ============================================ */
+.js-plotly-plot {
+    border-radius: var(--radius);
+}
+
+.js-plotly-plot .plotly .modebar {
+    top: 8px !important;
+    right: 8px !important;
+}
+
+.js-plotly-plot .plotly .modebar-btn {
+    font-size: 14px !important;
+}
+
+/* ============================================
+   Scrollbar
+   ============================================ */
 ::-webkit-scrollbar {
-    width: 10px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
+    background: var(--gray-100);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 10px;
+    background: var(--gray-300);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: var(--gray-400);
 }
 
-/* Chart styling */
-.js-plotly-plot {
-    border-radius: 5px;
+/* ============================================
+   Loading States
+   ============================================ */
+._dash-loading {
+    color: var(--primary);
 }
 
-/* Transcript segment active state */
-[id*="transcript-segment"][data-active="true"] {
-    background-color: #e3f2fd !important;
-    border-left: 4px solid #1e5a9e !important;
+._dash-loading-callback {
+    background-color: rgba(255, 255, 255, 0.8);
 }
 
-/* Responsive design */
+/* ============================================
+   Status Messages
+   ============================================ */
+[id="upload-status"] {
+    font-size: 0.875rem;
+    padding: var(--space-2) 0;
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
 @media (max-width: 768px) {
     h1 {
-        font-size: 24px !important;
+        font-size: 1.5rem !important;
     }
     
     h2 {
-        font-size: 20px !important;
+        font-size: 1rem !important;
     }
     
     .dash-dropdown {
         width: 100% !important;
     }
+    
+    button {
+        padding: var(--space-2) var(--space-3);
+        font-size: 0.8125rem;
+    }
 }
 
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+    body {
+        background: white;
+    }
+    
+    button,
+    .dash-uploader {
+        display: none !important;
+    }
+}
