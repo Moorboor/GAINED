@@ -65,6 +65,18 @@ LLM_T = np.clip(base_trend + noise, 0, 1)
 engagement = np.clip(LLM_T + np.random.normal(0, 0.1, n_segments), 0, 1)
 emotional_depth = np.clip(0.3 + 0.5 * (np.array(segment_ids) / n_segments) + np.random.normal(0, 0.08, n_segments), 0, 1)
 
+# Generate emotion labels for patient speech turns
+emotions = ['neutral', 'anxious', 'sad', 'happy', 'angry', 'calm', 'frustrated', 'hopeful']
+emotion_values = []
+for i, speaker in enumerate(speakers):
+    if speaker == 'Patient':
+        # Patient emotions - weighted distribution
+        emotion_weights = [0.2, 0.15, 0.15, 0.1, 0.1, 0.15, 0.1, 0.05]
+        emotion_values.append(np.random.choice(emotions, p=emotion_weights))
+    else:
+        # Therapist turns - mostly neutral/calm
+        emotion_values.append(np.random.choice(['neutral', 'calm', 'supportive'], p=[0.5, 0.3, 0.2]))
+
 # Create DataFrame
 df = pd.DataFrame({
     'segment_id': segment_ids,
@@ -74,7 +86,8 @@ df = pd.DataFrame({
     'text': texts,
     'LLM_T': LLM_T,
     'engagement': engagement,
-    'emotional_depth': emotional_depth
+    'emotional_depth': emotional_depth,
+    'emotion': emotion_values
 })
 
 # Save to CSV and Excel
