@@ -1,10 +1,14 @@
 """
 Data loading utilities for GAINED application
 """
+import logging
 import os
 import base64
 import io
+
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 # Paths
 ABS_PATH = os.path.abspath("")
@@ -161,8 +165,8 @@ def load_session_from_disk(patient_id, session_idx):
         
         return None, transcript_data
         
-    except Exception as e:
-        print(f"Error loading session: {e}")
+    except Exception:
+        logger.exception("Error loading session")
         return None, None
 
 
@@ -181,7 +185,205 @@ def encode_audio_to_base64(audio_data):
                 audio_bytes = f.read()
                 audio_b64 = base64.b64encode(audio_bytes).decode()
                 return f"data:audio/mp3;base64,{audio_b64}"
-        except Exception as e:
-            print(f"Error loading audio: {e}")
+        except Exception:
+            logger.exception("Error loading audio")
             return ""
+
+
+def load_xlsx_with_sheets(file_path_or_buffer):
+    """
+    Load xlsx file and return main sheet data and rationale sheets.
+    
+    Returns:
+        tuple: (main_df, rationale_dict) where:
+            - main_df: DataFrame from the first sheet (main sheet)
+            - rationale_dict: Dictionary mapping column names to their rationale DataFrames
+    """
+    try:
+        xl_file = pd.ExcelFile(file_path_or_buffer, engine='openpyxl')
+        
+        sheet_names = xl_file.sheet_names
+        
+        if not sheet_names:
+            return None, {}
+        
+        # First sheet is the main sheet
+        main_df = pd.read_excel(xl_file, sheet_name=sheet_names[0], engine='openpyxl')
+        main_df = _normalize_transcript_df(main_df)
+        
+        # Look for rationale sheets
+        rationale_dict = {}
+        main_columns = set(main_df.columns)
+        
+        # Check for a sheet named "rationale" first
+        rationale_sheet_name = None
+        for sheet_name in sheet_names[1:]:
+            if sheet_name.lower() == 'rationale':
+                rationale_sheet_name = sheet_name
+                break
+        
+        if rationale_sheet_name:
+            # Load rationale sheet and match columns
+            rationale_df = pd.read_excel(xl_file, sheet_name=rationale_sheet_name, engine='openpyxl')
+            
+            # Preserve segment_id or index if present for matching
+            key_cols = []
+            if 'segment_id' in rationale_df.columns:
+                key_cols.append('segment_id')
+            if 'index' in rationale_df.columns:
+                key_cols.append('index')
+            
+            for col in main_columns:
+                if col in rationale_df.columns:
+                    # Extract this column's rationale data plus key columns
+                    cols_to_keep = key_cols + [col]
+                    rationale_dict[col] = rationale_df[cols_to_keep].copy()
+                elif 'data' in rationale_df.columns:
+                    # Check if there's a column name column that matches
+                    # Look for a column that might indicate which field this rationale is for
+                    name_cols = [c for c in rationale_df.columns if any(kw in c.lower() for kw in ['name', 'field', 'column', 'metric'])]
+                    if name_cols:
+                        # Filter rows where the name column matches the main column
+                        matching_rows = rationale_df[rationale_df[name_cols[0]].astype(str).str.lower() == col.lower()]
+                        if not matching_rows.empty:
+                            # Use the 'data' column for rationale plus key columns
+                            cols_to_keep = key_cols + ['data']
+                            rationale_dict[col] = matching_rows[cols_to_keep].copy()
+                    else:
+                        # If no name column, assume all rows are for this column if it's the only one
+                        if len(main_columns) == 1 or col == list(main_columns)[0]:
+                            cols_to_keep = key_cols + ['data']
+                            rationale_dict[col] = rationale_df[cols_to_keep].copy()
+        else:
+            # Check if sheet name matches a column name (case-insensitive)
+            for sheet_name in sheet_names[1:]:  # Skip first sheet (main)
+                sheet_lower = sheet_name.lower()
+                matching_column = None
+                
+                for col in main_columns:
+                    if col.lower() == sheet_lower:
+                        matching_column = col
+                        break
+                
+                if matching_column:
+                    # Load rationale sheet
+                    rationale_df = pd.read_excel(xl_file, sheet_name=sheet_name, engine='openpyxl')
+                    
+                    # Preserve segment_id or index if present for matching
+                    key_cols = []
+                    if 'segment_id' in rationale_df.columns:
+                        key_cols.append('segment_id')
+                    if 'index' in rationale_df.columns:
+                        key_cols.append('index')
+                    
+                    # Check if there's a 'data' column, use it if available
+                    if 'data' in rationale_df.columns:
+                        cols_to_keep = key_cols + ['data']
+                        rationale_dict[matching_column] = rationale_df[cols_to_keep].copy()
+                    else:
+                        # Keep all columns including key columns
+                        rationale_dict[matching_column] = rationale_df
+        
+        return main_df, rationale_dict
+    
+    except Exception:
+        logger.exception("Error loading xlsx with sheets")
+        return None, {}
+
+
+def load_session_with_rationale(patient_id, session_idx):
+    """
+    Load session data including main sheet and rationale sheets.
+    
+    Returns:
+        tuple: (main_data_json, rationale_data_dict) where:
+            - main_data_json: JSON string of main sheet data
+            - rationale_data_dict: Dictionary mapping column names to rationale JSON strings
+    """
+    if patient_id is None or session_idx is None:
+        return None, {}
+    
+    patient_path = os.path.join(DATA_PATH, patient_id)
+    sessions = [s for s in os.listdir(patient_path) if s.endswith(('.xlsx', '.csv'))]
+    
+    if session_idx >= len(sessions):
+        return None, {}
+    
+    transcript_file = os.path.join(patient_path, sessions[session_idx])
+    
+    try:
+        if sessions[session_idx].endswith('.csv'):
+            # CSV files don't have multiple sheets
+            df = pd.read_csv(transcript_file)
+            df = _normalize_transcript_df(df)
+            main_data = df.to_json(date_format='iso', orient='split')
+            return main_data, {}
+        else:
+            # XLSX file - load with sheets
+            main_df, rationale_dict = load_xlsx_with_sheets(transcript_file)
+            
+            if main_df is None:
+                return None, {}
+            
+            main_data = main_df.to_json(date_format='iso', orient='split')
+            
+            # Convert rationale DataFrames to JSON
+            rationale_data_dict = {}
+            for col_name, rationale_df in rationale_dict.items():
+                rationale_data_dict[col_name] = rationale_df.to_json(date_format='iso', orient='split')
+            
+            return main_data, rationale_data_dict
+    
+    except Exception:
+        logger.exception("Error loading session with rationale")
+        return None, {}
+
+
+def process_transcript_upload_with_rationale(content, filename):
+    """
+    Process uploaded transcript file and return main data and rationale data.
+    
+    Returns:
+        tuple: (main_data_json, rationale_data_dict, status_message)
+    """
+    if not content or not filename:
+        return None, {}, ""
+    
+    if not filename.lower().endswith(('.xlsx', '.csv')):
+        return None, {}, f"⚠️ Unsupported transcript file: {filename}"
+    
+    try:
+        _, content_string = content.split(',', 1)
+        decoded = base64.b64decode(content_string)
+        
+        if filename.lower().endswith('.csv'):
+            # CSV files don't have multiple sheets
+            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
+            df = _normalize_transcript_df(df)
+            main_data = df.to_json(date_format='iso', orient='split')
+            return main_data, {}, f"✅ Transcript loaded: {filename} ({len(df)} segments)"
+        else:
+            # XLSX file - load with sheets
+            main_df, rationale_dict = load_xlsx_with_sheets(io.BytesIO(decoded))
+            
+            if main_df is None:
+                return None, {}, f"❌ Error loading {filename}: Could not read main sheet"
+            
+            main_data = main_df.to_json(date_format='iso', orient='split')
+            
+            # Convert rationale DataFrames to JSON
+            rationale_data_dict = {}
+            for col_name, rationale_df in rationale_dict.items():
+                rationale_data_dict[col_name] = rationale_df.to_json(date_format='iso', orient='split')
+            
+            rationale_count = len(rationale_dict)
+            status_msg = f"✅ Transcript loaded: {filename} ({len(main_df)} segments"
+            if rationale_count > 0:
+                status_msg += f", {rationale_count} rationale sheet(s)"
+            status_msg += ")"
+            
+            return main_data, rationale_data_dict, status_msg
+    
+    except Exception as e:
+        return None, {}, f"❌ Error loading {filename}: {str(e)}"
 

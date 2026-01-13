@@ -3,14 +3,9 @@ GAINED - Therapy Session Analysis Application
 Main entry point
 """
 from dash import Dash
-import os
 
-# Import modules
 from src.ui_components import create_layout
 from src.callbacks import register_callbacks, register_clientside_callbacks
-
-# Paths
-ABS_PATH = os.path.abspath("")
 
 # Initialize Dash app with external scripts for wavesurfer
 external_scripts = [
@@ -19,10 +14,11 @@ external_scripts = [
 ]
 
 app = Dash(
-    __name__, 
+    __name__,
+    title='GAINED',
     suppress_callback_exceptions=True,
     external_scripts=external_scripts,
-    assets_folder=os.path.join(ABS_PATH, 'app', 'assets')
+    assets_folder='assets'
 )
 
 # Set layout
