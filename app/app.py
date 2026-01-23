@@ -2,10 +2,10 @@
 GAINED - Therapy Session Analysis Application
 Main entry point
 """
-from dash import Dash
+from dash import Dash, html, dcc, Input, Output
 
-from src.ui_components import create_layout
-from src.callbacks import register_callbacks, register_clientside_callbacks
+from src.ui_components import create_layout, create_sessions_layout
+from src.callbacks import register_callbacks, register_clientside_callbacks, register_sessions_callbacks
 
 # Initialize Dash app with external scripts for wavesurfer
 external_scripts = [
@@ -21,12 +21,27 @@ app = Dash(
     assets_folder='assets'
 )
 
-# Set layout
-app.layout = create_layout()
+# Multi-page layout
+app.layout = html.Div([
+    dcc.Location(id='url', refresh=False),
+    html.Div(id='page-content')
+])
+
+# Page routing callback
+@app.callback(
+    Output('page-content', 'children'),
+    Input('url', 'pathname')
+)
+def display_page(pathname):
+    if pathname == '/sessions':
+        return create_sessions_layout()
+    else:
+        return create_layout()
 
 # Register callbacks
 register_callbacks(app)
 register_clientside_callbacks(app)
+register_sessions_callbacks(app)
 
 if __name__ == '__main__':
     app.run(debug=True, port=8050)
