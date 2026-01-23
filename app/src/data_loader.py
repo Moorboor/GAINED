@@ -387,3 +387,158 @@ def process_transcript_upload_with_rationale(content, filename):
     except Exception as e:
         return None, {}, f"❌ Error loading {filename}: {str(e)}"
 
+
+def extract_metadata_from_session(file_buffer, filename):
+    """
+    Extract metadata summary values from the second sheet of a session file.
+    Also extracts rationale from the third sheet (or 'rationale' named sheet).
+    
+    Expected metadata sheet structure:
+    - Column headers: selfreflection, engagement, homework (or similar)
+    - Single row with numeric values
+    
+    Returns:
+        dict: {
+            'filename': str,
+            'selfreflection': float or None,
+            'selfreflection_rationale': str or None,
+            'engagement': float or None,
+            'engagement_rationale': str or None,
+            'homework': float or None,
+            'homework_rationale': str or None
+        }
+    """
+    result = {
+        'filename': filename,
+        'selfreflection': None,
+        'selfreflection_rationale': None,
+        'engagement': None,
+        'engagement_rationale': None,
+        'homework': None,
+        'homework_rationale': None
+    }
+    
+    try:
+        if filename.lower().endswith('.csv'):
+            # CSV files don't have multiple sheets, skip
+            return result
+        
+        xl_file = pd.ExcelFile(file_buffer, engine='openpyxl')
+        sheet_names = xl_file.sheet_names
+        
+        if len(sheet_names) < 2:
+            logger.warning(f"File {filename} has fewer than 2 sheets")
+            return result
+        
+        # Read metadata sheet (second sheet)
+        metadata_df = pd.read_excel(xl_file, sheet_name=sheet_names[1], engine='openpyxl')
+        
+        # Find and extract metric columns (case-insensitive)
+        metric_names = ['selfreflection', 'engagement', 'homework']
+        col_mapping = {}
+        
+        for col in metadata_df.columns:
+            col_lower = str(col).lower().strip()
+            for metric in metric_names:
+                if metric in col_lower:
+                    col_mapping[metric] = col
+                    break
+        
+        # Extract first non-null value for each metric
+        for metric, col_name in col_mapping.items():
+            values = metadata_df[col_name].dropna()
+            if not values.empty:
+                try:
+                    result[metric] = float(values.iloc[0])
+                except (ValueError, TypeError):
+                    result[metric] = values.iloc[0]
+        
+        # Extract rationale from third sheet or 'rationale' named sheet
+        rationale_sheet = None
+        if len(sheet_names) >= 3:
+            rationale_sheet = sheet_names[2]
+        
+        # Check for explicitly named 'rationale' sheet
+        for sheet in sheet_names:
+            if sheet.lower() == 'rationale':
+                rationale_sheet = sheet
+                break
+        
+        if rationale_sheet:
+            try:
+                rationale_df = pd.read_excel(xl_file, sheet_name=rationale_sheet, engine='openpyxl')
+                
+                # Find matching columns for rationale
+                for col in rationale_df.columns:
+                    col_lower = str(col).lower().strip()
+                    for metric in metric_names:
+                        if metric in col_lower:
+                            values = rationale_df[col].dropna()
+                            if not values.empty:
+                                result[f'{metric}_rationale'] = str(values.iloc[0])
+                            break
+            except Exception as e:
+                logger.warning(f"Could not read rationale sheet: {e}")
+        
+        return result
+    
+    except Exception as e:
+        logger.exception(f"Error extracting metadata from {filename}")
+        return result
+
+
+def process_sessions_upload(contents_list, filenames_list):
+    """
+    Process multiple session file uploads and extract metadata from each.
+    
+    Args:
+        contents_list: List of base64 encoded file contents
+        filenames_list: List of filenames
+    
+    Returns:
+        tuple: (sessions_data_json, status_message)
+            - sessions_data_json: JSON string of list with session metadata
+            - status_message: Status message for UI
+    """
+    if not contents_list or not filenames_list:
+        return None, ""
+    
+    # Ensure lists
+    if not isinstance(contents_list, list):
+        contents_list = [contents_list]
+    if not isinstance(filenames_list, list):
+        filenames_list = [filenames_list]
+    
+    sessions_data = []
+    errors = []
+    
+    for idx, (content, filename) in enumerate(zip(contents_list, filenames_list)):
+        if not filename.lower().endswith(('.xlsx', '.csv')):
+            errors.append(f"⚠️ Skipped {filename}: unsupported format")
+            continue
+        
+        try:
+            _, content_string = content.split(',', 1)
+            decoded = base64.b64decode(content_string)
+            
+            # Extract metadata
+            metadata = extract_metadata_from_session(io.BytesIO(decoded), filename)
+            metadata['session_number'] = idx + 1
+            sessions_data.append(metadata)
+            
+        except Exception as e:
+            errors.append(f"❌ Error with {filename}: {str(e)}")
+    
+    if not sessions_data:
+        return None, " | ".join(errors) if errors else "No valid files uploaded"
+    
+    # Convert to JSON
+    sessions_df = pd.DataFrame(sessions_data)
+    sessions_json = sessions_df.to_json(date_format='iso', orient='split')
+    
+    status_parts = [f"✅ Loaded {len(sessions_data)} session(s)"]
+    if errors:
+        status_parts.extend(errors)
+    
+    return sessions_json, " | ".join(status_parts)
+
