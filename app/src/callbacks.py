@@ -483,7 +483,7 @@ def register_callbacks(app):
             pie_fig = go.Figure(data=[go.Pie(
                 labels=value_counts.index.astype(str),
                 values=value_counts.values,
-                hole=0.4,  # Creates a donut chart
+                hole=0,  # Full pie chart
                 textinfo='label+percent',
                 textposition='outside',
                 marker=dict(
