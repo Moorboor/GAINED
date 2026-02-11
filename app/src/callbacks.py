@@ -18,7 +18,6 @@ from .data_loader import (
     encode_audio_to_base64,
     process_audio_upload,
     process_transcript_upload_with_rationale,
-    process_sessions_upload,
 )
 
 logger = logging.getLogger(__name__)
@@ -479,11 +478,11 @@ def register_callbacks(app):
                 # Categorical/string fields - use value counts directly
                 value_counts = field_data.value_counts()
             
-            # Create pie chart (without center annotation)
-            pie_fig = go.Figure(data=[go.Pie(
+            # Create pie chart
+            fig = go.Figure(data=[go.Pie(
                 labels=value_counts.index.astype(str),
                 values=value_counts.values,
-                hole=0,  # Full pie chart
+                hole=0.4,  # Creates a donut chart
                 textinfo='label+percent',
                 textposition='outside',
                 marker=dict(
@@ -493,10 +492,10 @@ def register_callbacks(app):
                 hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
             )])
             
-            pie_fig.update_layout(
-                title=f'Distribution of {selected_field}',
+            fig.update_layout(
+                title=f'Distribution of {selected_field} in Patient Speech Turns',
                 template='plotly_white',
-                height=450,
+                height=500,
                 showlegend=True,
                 legend=dict(
                     orientation="v",
@@ -504,96 +503,19 @@ def register_callbacks(app):
                     y=0.5,
                     xanchor="left",
                     x=1.05
-                )
+                ),
+                annotations=[dict(
+                    text=f'Total<br>Patient Turns<br>{len(field_data)}',
+                    x=0.5, y=0.5,
+                    font_size=16,
+                    showarrow=False
+                )]
             )
             
-            return pie_fig
+            return fig
         
         except Exception as e:
             logger.exception("Error creating pie chart")
-            return go.Figure()
-    
-    
-    # Generate horizontal bar chart for patient speech-turn fields
-    @callback(
-        Output('bar-chart', 'figure'),
-        Input('pie-chart-field-selector', 'value'),
-        Input('transcript-data', 'data')
-    )
-    def generate_bar_chart(selected_field, transcript_data):
-        if not transcript_data or not selected_field:
-            return go.Figure()
-        
-        try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
-            
-            # Filter for patient speech turns only
-            patient_df = None
-            if 'speaker_text' in df.columns:
-                patient_df = df[df['speaker_text'].astype(str).str.contains('^P:', case=False, na=False, regex=True)].copy()
-            elif 'speaker' in df.columns:
-                def is_patient(value):
-                    if pd.isna(value):
-                        return False
-                    value_str = str(value).strip().lower()
-                    return 'patient' in value_str or value_str.startswith('p')
-                
-                patient_df = df[df['speaker'].apply(is_patient)].copy()
-            else:
-                patient_df = df.copy()
-            
-            if patient_df.empty or selected_field not in patient_df.columns:
-                return go.Figure()
-            
-            field_data = patient_df[selected_field].dropna()
-            
-            if field_data.empty:
-                return go.Figure()
-            
-            # Handle numeric fields by binning them
-            if field_data.dtype in ['int64', 'float64']:
-                if field_data.min() == field_data.max():
-                    value_counts = pd.Series([len(field_data)], index=[f'{field_data.iloc[0]:.3f}'])
-                else:
-                    try:
-                        n_bins = min(10, max(5, int(len(field_data) / 10)))
-                        if n_bins < 2:
-                            n_bins = 2
-                        bins = pd.qcut(field_data, q=n_bins, duplicates='drop', precision=2)
-                        value_counts = bins.value_counts().sort_index()
-                        value_counts.index = [str(interval) for interval in value_counts.index]
-                    except (ValueError, TypeError):
-                        bins = pd.cut(field_data, bins=min(10, field_data.nunique()), precision=2, duplicates='drop')
-                        value_counts = bins.value_counts().sort_index()
-                        value_counts.index = [str(interval) for interval in value_counts.index]
-            else:
-                value_counts = field_data.value_counts()
-            
-            # Create horizontal bar chart
-            bar_fig = go.Figure(data=[go.Bar(
-                y=value_counts.index.astype(str),
-                x=value_counts.values,
-                orientation='h',
-                marker=dict(
-                    color=px.colors.qualitative.Set3[:len(value_counts)],
-                    line=dict(color='#FFFFFF', width=1)
-                ),
-                hovertemplate='<b>%{y}</b><br>Count: %{x}<extra></extra>'
-            )])
-            
-            bar_fig.update_layout(
-                title=f'Distribution of {selected_field}',
-                template='plotly_white',
-                height=450,
-                xaxis_title='Count',
-                yaxis_title=selected_field,
-                yaxis=dict(autorange='reversed')  # To match pie chart order
-            )
-            
-            return bar_fig
-        
-        except Exception as e:
-            logger.exception("Error creating bar chart")
             return go.Figure()
     
     
@@ -1358,149 +1280,4 @@ def register_clientside_callbacks(app):
         Input({'type': 'transcript-segment', 'index': dash.dependencies.ALL}, 'n_clicks'),
         State('transcript-data', 'data')
     )
-
-
-def register_sessions_callbacks(app):
-    """Register callbacks for the Sessions page"""
-    
-    # Handle multiple session file uploads
-    @callback(
-        [Output('sessions-data', 'data'),
-         Output('sessions-upload-status', 'children')],
-        [Input('upload-sessions', 'contents')],
-        [State('upload-sessions', 'filename')]
-    )
-    def handle_sessions_upload(contents_list, filenames_list):
-        if not contents_list:
-            raise PreventUpdate
-        
-        from .data_loader import process_sessions_upload
-        sessions_json, status_msg = process_sessions_upload(contents_list, filenames_list)
-        
-        if not sessions_json:
-            return no_update, html.Div(status_msg or "No valid files", style={'color': '#dc2626'})
-        
-        status_div = html.Div(status_msg, style={
-            'color': '#059669' if '✅' in status_msg else '#d97706'
-        })
-        
-        return sessions_json, status_div
-    
-    
-    # Show/hide sessions chart section
-    @callback(
-        Output('sessions-chart-section', 'style'),
-        Input('sessions-data', 'data')
-    )
-    def update_sessions_chart_visibility(sessions_data):
-        visible_style = {
-            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
-            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
-        }
-        hidden_style = {'display': 'none'}
-        
-        return visible_style if sessions_data else hidden_style
-    
-    
-    # Generate sessions line chart with rationale tooltips
-    @callback(
-        Output('sessions-chart', 'figure'),
-        [Input('sessions-data', 'data'),
-         Input('sessions-metric-selector', 'value')]
-    )
-    def generate_sessions_chart(sessions_data, selected_metrics):
-        if not sessions_data or not selected_metrics:
-            return go.Figure()
-        
-        try:
-            df = pd.read_json(io.StringIO(sessions_data), orient='split')
-            
-            # Ensure selected_metrics is a list
-            if not isinstance(selected_metrics, list):
-                selected_metrics = [selected_metrics]
-            
-            # Limit to 3 metrics
-            selected_metrics = selected_metrics[:3]
-            
-            fig = go.Figure()
-            
-            # Color palette for metrics
-            colors = ['#2563eb', '#059669', '#d97706']
-            metric_labels = {
-                'selfreflection': 'Self-Reflection',
-                'engagement': 'Engagement',
-                'homework': 'Homework'
-            }
-            
-            for idx, metric in enumerate(selected_metrics):
-                if metric not in df.columns:
-                    continue
-                
-                # Get metric values
-                y_values = df[metric].tolist()
-                x_values = df['session_number'].tolist() if 'session_number' in df.columns else list(range(1, len(df) + 1))
-                
-                # Build hover text with rationale
-                hover_texts = []
-                rationale_col = f'{metric}_rationale'
-                
-                for i in range(len(df)):
-                    # Get filename
-                    filename = df['filename'].iloc[i] if 'filename' in df.columns else f'Session {i+1}'
-                    
-                    # Build tooltip parts
-                    parts = [
-                        f"<b>{metric_labels.get(metric, metric)}</b>: {y_values[i]:.3f}" if pd.notna(y_values[i]) and isinstance(y_values[i], (int, float)) else f"<b>{metric_labels.get(metric, metric)}</b>: {y_values[i]}",
-                        f"<b>File</b>: {filename}"
-                    ]
-                    
-                    # Add rationale if available
-                    if rationale_col in df.columns:
-                        rationale = df[rationale_col].iloc[i]
-                        if pd.notna(rationale) and str(rationale).strip() and str(rationale).lower() != 'nan':
-                            rationale_str = str(rationale).strip()
-                            # Truncate long rationale
-                            if len(rationale_str) > 200:
-                                rationale_str = rationale_str[:200] + "..."
-                            parts.append(f"<br><b>Rationale</b>: {rationale_str}")
-                    
-                    hover_texts.append("<br>".join(parts))
-                
-                fig.add_trace(go.Scatter(
-                    x=x_values,
-                    y=y_values,
-                    mode='lines+markers',
-                    name=metric_labels.get(metric, metric),
-                    line=dict(width=3, color=colors[idx % len(colors)]),
-                    marker=dict(size=10, color=colors[idx % len(colors)]),
-                    hovertemplate='%{text}<extra></extra>',
-                    text=hover_texts
-                ))
-            
-            fig.update_layout(
-                title='Session Metrics Over Time',
-                xaxis_title='Session Number',
-                yaxis_title='Metric Value',
-                hovermode='closest',
-                template='plotly_white',
-                height=450,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                ),
-                xaxis=dict(
-                    tickmode='linear',
-                    tick0=1,
-                    dtick=1
-                )
-            )
-            
-            return fig
-        
-        except Exception as e:
-            logger.exception("Error creating sessions chart")
-            return go.Figure()
 

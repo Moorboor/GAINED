@@ -185,7 +185,7 @@ def create_metrics_section():
 
 
 def create_pie_chart_section():
-    """Create the pie chart and bar chart section for patient speech-turn fields"""
+    """Create the pie chart section for patient speech-turn fields"""
     return html.Div([
         html.H2("Patient Speech Analysis"),
         html.Div([
@@ -202,14 +202,7 @@ def create_pie_chart_section():
                 style={'marginBottom': '16px'}
             ),
         ]),
-        html.Div([
-            html.Div([
-                dcc.Graph(id='pie-chart', config={'displayModeBar': True, 'displaylogo': False})
-            ], style={'flex': '1', 'minWidth': '400px'}),
-            html.Div([
-                dcc.Graph(id='bar-chart', config={'displayModeBar': True, 'displaylogo': False})
-            ], style={'flex': '1', 'minWidth': '400px'}),
-        ], style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '16px'})
+        dcc.Graph(id='pie-chart', config={'displayModeBar': True, 'displaylogo': False})
     ], id='pie-chart-section', style={**CARD_STYLE, 'display': 'none'})
 
 
@@ -266,9 +259,6 @@ def create_layout():
         create_pie_chart_section(),
         create_field_plots_section(),
         
-        # Sessions Link
-        create_sessions_link(),
-        
         # Data Stores
         dcc.Store(id='audio-data'),
         dcc.Store(id='transcript-data'),
@@ -282,150 +272,6 @@ def create_layout():
             dcc.Dropdown(id='session-dropdown', value=0, style=HIDDEN_STYLE),
             html.Button('Load', id='load-button', n_clicks=0, style=HIDDEN_STYLE)
         ], style=HIDDEN_STYLE),
-    ], style={
-        'maxWidth': '1200px',
-        'margin': '0 auto',
-        'padding': '24px',
-        'backgroundColor': COLORS['gray_100'],
-        'minHeight': '100vh'
-    })
-
-
-def create_sessions_upload_section():
-    """Create the multi-file upload section for sessions page"""
-    upload_box_style = {
-        'width': '100%',
-        'height': '120px',
-        'borderWidth': '2px',
-        'borderStyle': 'dashed',
-        'borderRadius': '8px',
-        'textAlign': 'center',
-        'backgroundColor': COLORS['gray_50'],
-        'display': 'flex',
-        'alignItems': 'center',
-        'justifyContent': 'center',
-        'cursor': 'pointer',
-        'transition': 'all 0.15s ease',
-        'borderColor': COLORS['primary'],
-    }
-    
-    return html.Div([
-        html.H2("Upload Session Files"),
-        html.P(
-            "Upload multiple session files (XLSX/CSV) to analyze trends across sessions",
-            style={'color': COLORS['gray_500'], 'fontSize': '14px', 'marginBottom': '16px'}
-        ),
-        dcc.Upload(
-            id='upload-sessions',
-            children=html.Div([
-                html.Div('Drop XLSX or CSV files here', style={
-                    'fontSize': '15px',
-                    'color': COLORS['primary'],
-                    'fontWeight': '500',
-                    'marginBottom': '8px'
-                }),
-                html.Div('or click to browse (multiple files allowed)', style={
-                    'fontSize': '13px',
-                    'color': COLORS['gray_400'],
-                })
-            ]),
-            style=upload_box_style,
-            multiple=True,
-            accept='.xlsx,.csv'
-        ),
-        html.Div(id='sessions-upload-status', style={'marginTop': '12px', 'fontSize': '13px'})
-    ], style=CARD_STYLE)
-
-
-def create_sessions_chart_section():
-    """Create the line chart section for sessions trends"""
-    return html.Div([
-        html.H2("Session Trends"),
-        html.Div([
-            html.Label("Select metrics to display (1-3)", style={
-                'fontSize': '13px',
-                'fontWeight': '500',
-                'color': COLORS['gray_600'],
-                'marginBottom': '8px',
-                'display': 'block'
-            }),
-            dcc.Dropdown(
-                id='sessions-metric-selector',
-                options=[
-                    {'label': 'Self-Reflection', 'value': 'selfreflection'},
-                    {'label': 'Engagement', 'value': 'engagement'},
-                    {'label': 'Homework', 'value': 'homework'},
-                ],
-                value=['selfreflection', 'engagement', 'homework'],
-                multi=True,
-                placeholder="Select metrics...",
-                style={'marginBottom': '16px'}
-            ),
-        ]),
-        dcc.Graph(id='sessions-chart', config={'displayModeBar': True, 'displaylogo': False})
-    ], id='sessions-chart-section', style={**CARD_STYLE, 'display': 'none'})
-
-
-def create_sessions_link():
-    """Create link to sessions page at the end of main layout"""
-    return html.Div([
-        dcc.Link(
-            html.Button('Go to Sessions Analysis', style={
-                'padding': '12px 24px',
-                'backgroundColor': COLORS['primary'],
-                'color': 'white',
-                'border': 'none',
-                'borderRadius': '8px',
-                'fontSize': '14px',
-                'fontWeight': '500',
-                'cursor': 'pointer',
-                'width': '100%',
-                'transition': 'all 0.15s ease',
-            }),
-            href='/sessions',
-            style={'textDecoration': 'none', 'display': 'block'}
-        )
-    ], style={**CARD_STYLE, 'textAlign': 'center'})
-
-
-def create_sessions_layout():
-    """Create the sessions page layout"""
-    return html.Div([
-        # Header
-        html.Div([
-            html.H1("GAINED - Sessions", style={
-                'textAlign': 'center',
-                'marginBottom': '4px',
-                'color': COLORS['gray_900']
-            }),
-            html.P("Multi-Session Trend Analysis", style={
-                'textAlign': 'center',
-                'color': COLORS['gray_500'],
-                'fontSize': '14px',
-                'marginBottom': '16px'
-            }),
-            dcc.Link(
-                "← Back to Single Session Analysis",
-                href='/',
-                style={
-                    'display': 'block',
-                    'textAlign': 'center',
-                    'color': COLORS['primary'],
-                    'fontSize': '13px',
-                    'marginBottom': '24px',
-                    'textDecoration': 'none'
-                }
-            )
-        ]),
-        
-        # Upload Section
-        create_sessions_upload_section(),
-        
-        # Chart Section
-        create_sessions_chart_section(),
-        
-        # Data Store
-        dcc.Store(id='sessions-data'),
     ], style={
         'maxWidth': '1200px',
         'margin': '0 auto',
