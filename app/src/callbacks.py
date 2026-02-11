@@ -478,22 +478,44 @@ def register_callbacks(app):
                 # Categorical/string fields - use value counts directly
                 value_counts = field_data.value_counts()
             
-            # Create pie chart
-            fig = go.Figure(data=[go.Pie(
+            # Create subplots: pie chart + bar chart side by side
+            from plotly.subplots import make_subplots
+            
+            fig = make_subplots(
+                rows=1, cols=2,
+                specs=[[{"type": "pie"}, {"type": "bar"}]],
+                subplot_titles=[f'Distribution of {selected_field}', f'Distribution of {selected_field}'],
+                column_widths=[0.5, 0.5]
+            )
+            
+            # Colors
+            colors = px.colors.qualitative.Set3[:len(value_counts)]
+            
+            # 1. Donut Pie Chart (left)
+            fig.add_trace(go.Pie(
                 labels=value_counts.index.astype(str),
                 values=value_counts.values,
-                hole=0.4,  # Creates a donut chart
+                hole=0.4,
                 textinfo='label+percent',
                 textposition='outside',
                 marker=dict(
-                    colors=px.colors.qualitative.Set3,
+                    colors=colors,
                     line=dict(color='#FFFFFF', width=2)
                 ),
                 hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
-            )])
+            ), row=1, col=1)
+            
+            # 2. Horizontal Bar Chart (right)
+            fig.add_trace(go.Bar(
+                y=value_counts.index.astype(str),
+                x=value_counts.values,
+                orientation='h',
+                marker=dict(color=colors),
+                hovertemplate='<b>%{y}</b><br>Count: %{x}<extra></extra>',
+                showlegend=False
+            ), row=1, col=2)
             
             fig.update_layout(
-                title=f'Distribution of {selected_field} in Patient Speech Turns',
                 template='plotly_white',
                 height=500,
                 showlegend=True,
@@ -501,16 +523,15 @@ def register_callbacks(app):
                     orientation="v",
                     yanchor="middle",
                     y=0.5,
-                    xanchor="left",
-                    x=1.05
+                    xanchor="center",
+                    x=0.5
                 ),
-                annotations=[dict(
-                    text=f'Total<br>Patient Turns<br>{len(field_data)}',
-                    x=0.5, y=0.5,
-                    font_size=16,
-                    showarrow=False
-                )]
+                margin=dict(l=40, r=40, t=60, b=40)
             )
+            
+            # Update bar chart axes
+            fig.update_xaxes(title_text="Count", row=1, col=2)
+            fig.update_yaxes(title_text=selected_field, row=1, col=2)
             
             return fig
         
@@ -787,6 +808,75 @@ def register_callbacks(app):
             logger.exception("Error creating field plots")
             return html.Div(f"Error displaying plots: {str(e)}", 
                           style={'textAlign': 'center', 'color': '#dc2626', 'padding': '40px', 'fontSize': '13px'})
+
+
+    # Show/hide session rationale section
+    @callback(
+        Output('session-rationale-section', 'style'),
+        Input('rationale-data', 'data')
+    )
+    def update_session_rationale_visibility(rationale_data):
+        visible_style = {
+            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
+            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
+        }
+        hidden_style = {'display': 'none'}
+        
+        if rationale_data and '_session_rationale' in rationale_data:
+            return visible_style
+        return hidden_style
+
+
+    # Populate session rationale content
+    @callback(
+        Output('session-rationale-content', 'children'),
+        Input('rationale-data', 'data')
+    )
+    def update_session_rationale_content(rationale_data):
+        if not rationale_data or '_session_rationale' not in rationale_data:
+            return html.Div("No session rationale available",
+                          style={'textAlign': 'center', 'color': '#9ca3af', 'padding': '40px'})
+        
+        session_rationale = rationale_data['_session_rationale']
+        
+        if not session_rationale:
+            return html.Div("No session rationale available",
+                          style={'textAlign': 'center', 'color': '#9ca3af', 'padding': '40px'})
+        
+        # Display labels for known metrics
+        metric_labels = {
+            'activation': 'Activation',
+            'engagement': 'Engagement',
+            'CTS_Cognitions': 'CTS - Cognitions',
+            'CTS_Behaviours': 'CTS - Behaviours', 
+            'CTS_Discovery': 'CTS - Discovery',
+            'CTS_Methods': 'CTS - Methods'
+        }
+        
+        cards = []
+        for metric_key, rationale_text in session_rationale.items():
+            label = metric_labels.get(metric_key, metric_key)
+            
+            card = html.Div([
+                html.H4(label, style={
+                    'fontSize': '14px', 'fontWeight': '600', 'marginBottom': '8px',
+                    'color': '#1f2937'
+                }),
+                html.Div(rationale_text, style={
+                    'padding': '12px 16px',
+                    'backgroundColor': '#f9fafb',
+                    'borderRadius': '6px',
+                    'borderLeft': '3px solid #2563eb',
+                    'fontSize': '13px',
+                    'lineHeight': '1.6',
+                    'color': '#374151',
+                    'whiteSpace': 'pre-line'
+                })
+            ], style={'marginBottom': '16px'})
+            
+            cards.append(card)
+        
+        return cards
     
     
     # Show/hide field plots section when transcript data is available
@@ -802,6 +892,248 @@ def register_callbacks(app):
         hidden_style = {'display': 'none'}
         
         return visible_style if transcript_data else hidden_style
+
+
+    # Routing callback
+    @callback(
+        Output('page-content', 'children'),
+        Input('url', 'pathname')
+    )
+    def display_page(pathname):
+        from .ui_components import create_main_analysis_layout, create_sessions_layout
+        
+        if pathname == '/sessions':
+            return create_sessions_layout()
+        else:
+            return create_main_analysis_layout()
+
+
+    # Handle sessions file upload
+    @callback(
+        [Output('sessions-data', 'data'),
+         Output('sessions-upload-status', 'children')],
+        Input('upload-sessions', 'contents'),
+        State('upload-sessions', 'filename')
+    )
+    def handle_sessions_upload(contents, filenames):
+        if not contents or not filenames:
+            raise PreventUpdate
+        
+        from .data_loader import process_sessions_upload
+        
+        sessions_json, status_msg = process_sessions_upload(contents, filenames)
+        
+        status_div = html.Div(status_msg, style={
+            'color': '#059669' if '✅' in status_msg else '#dc2626'
+        })
+        
+        return sessions_json, status_div
+
+
+    # Update sessions charts
+    @callback(
+        [Output('tccs-chart', 'figure'),
+         Output('activation-engagement-chart', 'figure'),
+         Output('cts-chart', 'figure'),
+         Output('sessions-detailed-charts-section', 'style')],
+        [Input('sessions-data', 'data')]
+    )
+    def update_sessions_charts(sessions_json):
+        # Detailed charts style
+        detailed_section_style = {'display': 'block', 'marginTop': '24px', 'padding': '0 12px'}
+        hidden_style = {'display': 'none'}
+        
+        empty_figs = (go.Figure(), go.Figure(), go.Figure())
+        
+        if not sessions_json:
+            return (*empty_figs, hidden_style)
+        
+        try:
+            df = pd.read_json(io.StringIO(sessions_json), orient='split')
+            
+            if df.empty:
+                return (*empty_figs, hidden_style)
+            
+            # Sort by session number
+            if 'session_number' in df.columns:
+                df = df.sort_values('session_number')
+            
+            x_data = df['session_number'] if 'session_number' in df.columns else df.index
+            
+            # Helper to create trace with rationale
+            def create_trace(metric_name, label, color):
+                if metric_name not in df.columns:
+                    return None
+                
+                hover_texts = []
+                
+                for idx, row in df.iterrows():
+                    val = row.get(metric_name)
+                    
+                    hover_text = f"<b>Session {row.get('session_number', idx+1)}</b><br>"
+                    hover_text += f"{label}: {val}"
+                    
+                    hover_texts.append(hover_text)
+                
+                return go.Scatter(
+                    x=x_data,
+                    y=df[metric_name],
+                    mode='lines+markers',
+                    name=label,
+                    line=dict(width=3, color=color),
+                    marker=dict(size=8),
+                    hovertemplate='%{text}<extra></extra>',
+                    text=hover_texts
+                )
+
+            # 1. TCCS Chart (Challenging vs Supporting)
+            fig_tccs = go.Figure()
+            t1 = create_trace('challenging', 'Challenging (TCCS_SP)', '#dc2626') # Red
+            t2 = create_trace('supporting', 'Supporting (TCCS_C)', '#2563eb')   # Blue
+            if t1: fig_tccs.add_trace(t1)
+            if t2: fig_tccs.add_trace(t2)
+            
+            fig_tccs.update_layout(
+                xaxis_title='Session Number',
+                yaxis_title='Score',
+                hovermode='closest',
+                template='plotly_white',
+                margin=dict(l=40, r=40, t=30, b=40),
+                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
+            )
+
+            # 2. Activation vs Engagement Chart
+            fig_ae = go.Figure()
+            t1 = create_trace('activation', 'Activation', '#9333ea')   # Purple
+            t2 = create_trace('engagement', 'Engagement', '#059669')   # Green
+            if t1: fig_ae.add_trace(t1)
+            if t2: fig_ae.add_trace(t2)
+            
+            fig_ae.update_layout(
+                xaxis_title='Session Number',
+                yaxis_title='Score',
+                hovermode='closest',
+                template='plotly_white',
+                margin=dict(l=40, r=40, t=30, b=40),
+                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
+            )
+
+            # 3. CTS Chart
+            fig_cts = go.Figure()
+            cts_metrics = [
+                ('cts_cognitions', 'Cognitions', '#ea580c'),   # Orange
+                ('cts_behaviours', 'Behaviours', '#0891b2'),   # Cyan
+                ('cts_discovery', 'Discovery', '#db2777'),     # Pink
+                ('cts_methods', 'Methods', '#4f46e5')          # Indigo
+            ]
+            for metric, label, color in cts_metrics:
+                t = create_trace(metric, label, color)
+                if t: fig_cts.add_trace(t)
+            
+            fig_cts.update_layout(
+                xaxis_title='Session Number',
+                yaxis_title='Score',
+                hovermode='closest',
+                template='plotly_white',
+                margin=dict(l=40, r=40, t=30, b=40),
+                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
+            )
+            
+            return fig_tccs, fig_ae, fig_cts, detailed_section_style
+            
+        except Exception as e:
+            logger.exception("Error updating sessions charts")
+            return (*empty_figs, hidden_style)
+
+
+    # Update rationale text boxes
+    @callback(
+        [Output('tccs-rationale', 'children'),
+         Output('activation-rationale', 'children'),
+         Output('cts-rationale', 'children')],
+        [Input('tccs-chart', 'clickData'),
+         Input('activation-engagement-chart', 'clickData'),
+         Input('cts-chart', 'clickData'),
+         Input('sessions-data', 'data')]
+    )
+    def update_rationale_boxes(tccs_click, ae_click, cts_click, sessions_json):
+        if not sessions_json:
+            return "No data", "No data", "No data"
+            
+        try:
+            df = pd.read_json(io.StringIO(sessions_json), orient='split')
+            if df.empty:
+                return "No data", "No data", "No data"
+            
+            # Sort by session number
+            if 'session_number' in df.columns:
+                df = df.sort_values('session_number')
+            
+            # Helper to extract rationale text for a session index
+            def get_rationale_text(session_idx, metrics):
+                if session_idx >= len(df):
+                    return "Session not found"
+                
+                row = df.iloc[session_idx]
+                session_num = row.get('session_number', session_idx + 1)
+                text_parts = [f"** Session {session_num} **"]
+                
+                for metric, label in metrics:
+                    val = row.get(metric)
+                    rationale = row.get(f"{metric}_rationale")
+                    
+                    if pd.notna(val) or (pd.notna(rationale) and str(rationale).strip()):
+                        text_parts.append(f"\n[{label}]")
+                        if pd.notna(val):
+                            text_parts.append(f"Score: {val}")
+                        if pd.notna(rationale) and str(rationale).strip():
+                            text_parts.append(f"Rationale: {str(rationale).strip()}")
+                        else:
+                            text_parts.append("Rationale: N/A")
+                            
+                return "\n".join(text_parts)
+
+            # Determine session index for each chart
+            # Default to last session (-1) if no click
+            
+            # TCCS
+            tccs_idx = -1
+            if tccs_click and 'points' in tccs_click:
+                # Use pointIndex from clickData
+                tccs_idx = tccs_click['points'][0]['pointIndex']
+            
+            tccs_text = get_rationale_text(tccs_idx, [
+                ('challenging', 'Challenging (TCCS_SP)'),
+                ('supporting', 'Supporting (TCCS_C)')
+            ])
+            
+            # Activation/Engagement
+            ae_idx = -1
+            if ae_click and 'points' in ae_click:
+                ae_idx = ae_click['points'][0]['pointIndex']
+            
+            ae_text = get_rationale_text(ae_idx, [
+                ('activation', 'Activation'),
+                ('engagement', 'Engagement')
+            ])
+            
+            # CTS
+            cts_idx = -1
+            if cts_click and 'points' in cts_click:
+                cts_idx = cts_click['points'][0]['pointIndex']
+            
+            cts_text = get_rationale_text(cts_idx, [
+                ('cts_cognitions', 'Cognitions'),
+                ('cts_behaviours', 'Behaviours'),
+                ('cts_discovery', 'Discovery'),
+                ('cts_methods', 'Methods')
+            ])
+            
+            return tccs_text, ae_text, cts_text
+            
+        except Exception as e:
+            logger.exception("Error updating rationale boxes")
+            return f"Error: {e}", f"Error: {e}", f"Error: {e}"
 
 
 def register_clientside_callbacks(app):
@@ -870,6 +1202,9 @@ def register_clientside_callbacks(app):
                     window.wavesurfer.on('ready', function() {
                         console.log('🎉 WaveSurfer ready!');
                         waveformDiv.style.padding = '0';
+                        // Remove loading text (WaveSurfer v7 appends to container, doesn't replace innerHTML)
+                        var loadingTexts = waveformDiv.querySelectorAll('p');
+                        loadingTexts.forEach(function(el) { el.remove(); });
                         
                         // Add speaker regions from transcript
                         if (transcriptData && window.wsRegions) {
@@ -1028,6 +1363,9 @@ def register_clientside_callbacks(app):
                 window.wavesurfer.on('ready', function() {
                     console.log('🎉 Waveform ready! Adding speaker regions...');
                     waveformDiv.style.padding = '0';
+                    // Remove loading text
+                    var loadingTexts = waveformDiv.querySelectorAll('p');
+                    loadingTexts.forEach(function(el) { el.remove(); });
                     
                     // Add speaker regions from transcript
                     if (transcriptData && window.wsRegions) {

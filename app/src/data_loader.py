@@ -197,7 +197,9 @@ def load_xlsx_with_sheets(file_path_or_buffer):
     Returns:
         tuple: (main_df, rationale_dict) where:
             - main_df: DataFrame from the first sheet (main sheet)
-            - rationale_dict: Dictionary mapping column names to their rationale DataFrames
+            - rationale_dict: Dictionary mapping column names to their rationale DataFrames.
+              Also includes '_session_rationale' key with session-level rationale text
+              (dict of metric_name -> rationale_text).
     """
     try:
         xl_file = pd.ExcelFile(file_path_or_buffer, engine='openpyxl')
@@ -223,7 +225,7 @@ def load_xlsx_with_sheets(file_path_or_buffer):
                 break
         
         if rationale_sheet_name:
-            # Load rationale sheet and match columns
+            # Load rationale sheet
             rationale_df = pd.read_excel(xl_file, sheet_name=rationale_sheet_name, engine='openpyxl')
             
             # Preserve segment_id or index if present for matching
@@ -233,27 +235,38 @@ def load_xlsx_with_sheets(file_path_or_buffer):
             if 'index' in rationale_df.columns:
                 key_cols.append('index')
             
-            for col in main_columns:
-                if col in rationale_df.columns:
-                    # Extract this column's rationale data plus key columns
-                    cols_to_keep = key_cols + [col]
-                    rationale_dict[col] = rationale_df[cols_to_keep].copy()
-                elif 'data' in rationale_df.columns:
-                    # Check if there's a column name column that matches
-                    # Look for a column that might indicate which field this rationale is for
-                    name_cols = [c for c in rationale_df.columns if any(kw in c.lower() for kw in ['name', 'field', 'column', 'metric'])]
-                    if name_cols:
-                        # Filter rows where the name column matches the main column
-                        matching_rows = rationale_df[rationale_df[name_cols[0]].astype(str).str.lower() == col.lower()]
-                        if not matching_rows.empty:
-                            # Use the 'data' column for rationale plus key columns
-                            cols_to_keep = key_cols + ['data']
-                            rationale_dict[col] = matching_rows[cols_to_keep].copy()
-                    else:
-                        # If no name column, assume all rows are for this column if it's the only one
-                        if len(main_columns) == 1 or col == list(main_columns)[0]:
-                            cols_to_keep = key_cols + ['data']
-                            rationale_dict[col] = rationale_df[cols_to_keep].copy()
+            # Track session-level rationale (columns ending in _rationale)
+            session_rationale = {}
+            
+            for col in rationale_df.columns:
+                col_str = str(col)
+                
+                # Check if this column matches a main data column (segment-level rationale)
+                if col_str in main_columns:
+                    cols_to_keep = key_cols + [col_str]
+                    rationale_dict[col_str] = rationale_df[cols_to_keep].copy()
+                # Check if column ends with _rationale (session-level rationale)
+                elif col_str.lower().endswith('_rationale'):
+                    # Extract metric name by removing _rationale suffix
+                    metric_name = col_str.rsplit('_rationale', 1)[0]
+                    val = rationale_df[col_str].iloc[0] if len(rationale_df) > 0 else None
+                    if pd.notna(val) and str(val).strip():
+                        session_rationale[metric_name] = str(val).strip()
+            
+            # Store session-level rationale under special key
+            if session_rationale:
+                rationale_dict['_session_rationale'] = session_rationale
+                
+            # Also check for 'data' column matching main columns
+            if 'data' in rationale_df.columns:
+                name_cols = [c for c in rationale_df.columns if any(kw in c.lower() for kw in ['name', 'field', 'column', 'metric'])]
+                if name_cols:
+                    for col in main_columns:
+                        if col not in rationale_dict:
+                            matching_rows = rationale_df[rationale_df[name_cols[0]].astype(str).str.lower() == col.lower()]
+                            if not matching_rows.empty:
+                                cols_to_keep = key_cols + ['data']
+                                rationale_dict[col] = matching_rows[cols_to_keep].copy()
         else:
             # Check if sheet name matches a column name (case-insensitive)
             for sheet_name in sheet_names[1:]:  # Skip first sheet (main)
@@ -371,10 +384,16 @@ def process_transcript_upload_with_rationale(content, filename):
             
             main_data = main_df.to_json(date_format='iso', orient='split')
             
-            # Convert rationale DataFrames to JSON
+            # Convert rationale data to JSON-serializable format
             rationale_data_dict = {}
-            for col_name, rationale_df in rationale_dict.items():
-                rationale_data_dict[col_name] = rationale_df.to_json(date_format='iso', orient='split')
+            for col_name, rationale_val in rationale_dict.items():
+                if col_name == '_session_rationale':
+                    # Session-level rationale is already a plain dict
+                    rationale_data_dict[col_name] = rationale_val
+                elif isinstance(rationale_val, pd.DataFrame):
+                    rationale_data_dict[col_name] = rationale_val.to_json(date_format='iso', orient='split')
+                else:
+                    rationale_data_dict[col_name] = rationale_val
             
             rationale_count = len(rationale_dict)
             status_msg = f"✅ Transcript loaded: {filename} ({len(main_df)} segments"
@@ -386,4 +405,186 @@ def process_transcript_upload_with_rationale(content, filename):
     
     except Exception as e:
         return None, {}, f"❌ Error loading {filename}: {str(e)}"
+
+
+def extract_metadata_from_session(file_buffer, filename):
+    """
+    Extract metadata summary values and rationale from a session file.
+    
+    Structure based on user inputs and file inspection:
+    - Metadata Sheet (2nd sheet or 'metadata'): contains metric values in columns.
+      - activation_mean, engagement_mean, TCCS_SP, TCCS_C, CTS_Cognitions, etc.
+    - Rationale Sheet (3rd sheet or 'rationale'): contains rationale text in columns.
+      - activation_rationale, engagement_rationale, CTS_Cognitions_rationale, etc.
+    
+    Returns:
+        dict: Dictionary containing metric values and rationales
+    """
+    # Mapping Config: Internal Name -> { 'metric_cols': [], 'rationale_cols': [] }
+    # We look for the first matching column in the list.
+    config = {
+        'selfreflection': {
+            'metric': ['selfreflection', 'self_reflection'], 
+            'rationale': ['selfreflection_rationale', 'self_reflection_rationale']
+        },
+        'activation': {
+            'metric': ['activation_mean', 'activation'], 
+            'rationale': ['activation_rationale', 'activation_mean_rationale']
+            # File inspection showed 'activation_mean' in metadata and 'activation_rationale' in rationale
+        },
+        'engagement': {
+            'metric': ['engagement_mean', 'engagement'], 
+            'rationale': ['engagement_rationale', 'engagement_mean_rationale']
+        },
+        'homework': {
+            'metric': ['homework'], 
+            'rationale': ['homework_rationale']
+        },
+        'challenging': {
+            'metric': ['TCCS_SP', 'challenging'], 
+            'rationale': ['TCCS_SP_rationale', 'challenging_rationale']
+        },
+        'supporting': {
+            'metric': ['TCCS_C', 'supporting'], 
+            'rationale': ['TCCS_C_rationale', 'supporting_rationale']
+        },
+        'cts_cognitions': {
+            'metric': ['CTS_Cognitions', 'cognitions'], 
+            'rationale': ['CTS_Cognitions_rationale', 'cognitions_rationale']
+        },
+        'cts_behaviours': {
+            'metric': ['CTS_Behaviours', 'behaviours', 'behaviors'], 
+            'rationale': ['CTS_Behaviours_rationale', 'behaviours_rationale']
+        },
+        'cts_discovery': {
+            'metric': ['CTS_Discovery', 'discovery'], 
+            'rationale': ['CTS_Discovery_rationale', 'discovery_rationale']
+        },
+        'cts_methods': {
+            'metric': ['CTS_Methods', 'methods'], 
+            'rationale': ['CTS_Methods_rationale', 'methods_rationale']
+        }
+    }
+    
+    result = {'filename': filename, 'session_idx': 0}
+    # Initialize keys
+    for key in config:
+        result[key] = None
+        result[f'{key}_rationale'] = None
+
+    try:
+        if filename.lower().endswith('.csv'):
+            return result
+        
+        xl_file = pd.ExcelFile(file_buffer, engine='openpyxl')
+        sheet_names = xl_file.sheet_names
+        
+        # 1. Identify Sheets
+        meta_sheet = next((s for s in sheet_names if s.lower() == 'metadata'), None)
+        if not meta_sheet and len(sheet_names) > 1:
+            meta_sheet = sheet_names[1]
+            
+        rat_sheet = next((s for s in sheet_names if s.lower() == 'rationale'), None)
+        if not rat_sheet and len(sheet_names) > 2:
+            rat_sheet = sheet_names[2]
+            
+        if not meta_sheet:
+            logger.warning(f"No metadata sheet found in {filename}")
+            return result
+
+        # 2. Extract Metrics from Metadata Sheet
+        meta_df = pd.read_excel(xl_file, sheet_name=meta_sheet, engine='openpyxl')
+        
+        for key, conf in config.items():
+            # Find matching column
+            col_match = next((c for c in meta_df.columns if str(c) in conf['metric']), None)
+            
+            # If no exact match (case-sensitive from config), try case-insensitive
+            if not col_match:
+                col_match = next((c for c in meta_df.columns if str(c).lower() in [m.lower() for m in conf['metric']]), None)
+            
+            if col_match:
+                val = meta_df[col_match].iloc[0] # Take first row
+                try:
+                    result[key] = float(val)
+                except (ValueError, TypeError):
+                    result[key] = val
+
+        # 3. Extract Rationale from Rationale Sheet
+        if rat_sheet:
+            rat_df = pd.read_excel(xl_file, sheet_name=rat_sheet, engine='openpyxl')
+            
+            for key, conf in config.items():
+                # Find matching column
+                col_match = next((c for c in rat_df.columns if str(c) in conf['rationale']), None)
+                
+                if not col_match:
+                    col_match = next((c for c in rat_df.columns if str(c).lower() in [r.lower() for r in conf['rationale']]), None)
+                
+                if col_match:
+                    val = rat_df[col_match].iloc[0]
+                    if pd.notna(val):
+                        result[f'{key}_rationale'] = str(val)
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Error extracting metadata from {filename}")
+        return result
+
+
+def process_sessions_upload(contents_list, filenames_list):
+    """
+    Process multiple session file uploads and extract metadata from each.
+    
+    Args:
+        contents_list: List of base64 encoded file contents
+        filenames_list: List of filenames
+    
+    Returns:
+        tuple: (sessions_data_json, status_message)
+            - sessions_data_json: JSON string of list with session metadata
+            - status_message: Status message for UI
+    """
+    if not contents_list or not filenames_list:
+        return None, ""
+    
+    # Ensure lists
+    if not isinstance(contents_list, list):
+        contents_list = [contents_list]
+    if not isinstance(filenames_list, list):
+        filenames_list = [filenames_list]
+    
+    sessions_data = []
+    errors = []
+    
+    for idx, (content, filename) in enumerate(zip(contents_list, filenames_list)):
+        if not filename.lower().endswith(('.xlsx', '.csv')):
+            errors.append(f"⚠️ Skipped {filename}: unsupported format")
+            continue
+        
+        try:
+            _, content_string = content.split(',', 1)
+            decoded = base64.b64decode(content_string)
+            
+            # Extract metadata
+            metadata = extract_metadata_from_session(io.BytesIO(decoded), filename)
+            metadata['session_number'] = idx + 1
+            sessions_data.append(metadata)
+            
+        except Exception as e:
+            errors.append(f"❌ Error with {filename}: {str(e)}")
+    
+    if not sessions_data:
+        return None, " | ".join(errors) if errors else "No valid files uploaded"
+    
+    # Convert to JSON
+    sessions_df = pd.DataFrame(sessions_data)
+    sessions_json = sessions_df.to_json(date_format='iso', orient='split')
+    
+    status_parts = [f"✅ Loaded {len(sessions_data)} session(s)"]
+    if errors:
+        status_parts.extend(errors)
+    
+    return sessions_json, " | ".join(status_parts)
 

@@ -206,6 +206,20 @@ def create_pie_chart_section():
     ], id='pie-chart-section', style={**CARD_STYLE, 'display': 'none'})
 
 
+def create_session_rationale_section():
+    """Create the session-level rationale section displaying summary rationale from the rationale sheet"""
+    return html.Div([
+        html.H2("Session Rationale Summary", style={'marginBottom': '16px'}),
+        html.P("Summary rationale for session-level metrics (from rationale sheet)", style={
+            'color': COLORS['gray_500'], 'fontSize': '13px', 'marginBottom': '16px'
+        }),
+        html.Div(id='session-rationale-content', children=[
+            html.Div("Upload a session file to see rationale",
+                    style={'textAlign': 'center', 'color': COLORS['gray_400'], 'padding': '40px', 'fontSize': '14px'})
+        ])
+    ], id='session-rationale-section', style={**CARD_STYLE, 'display': 'none'})
+
+
 def create_field_plots_section():
     """Create the field plots section with rationale display"""
     return html.Div([
@@ -233,8 +247,169 @@ def create_field_plots_section():
     ], id='field-plots-section', style={**CARD_STYLE, 'display': 'none'})
 
 
+
+
+def create_sessions_upload_section():
+    """Create the multi-file upload section for sessions"""
+    upload_box_style = {
+        'width': '100%',
+        'height': '120px',
+        'borderWidth': '2px',
+        'borderStyle': 'dashed',
+        'borderRadius': '8px',
+        'textAlign': 'center',
+        'backgroundColor': COLORS['gray_50'],
+        'display': 'flex',
+        'alignItems': 'center',
+        'justifyContent': 'center',
+        'cursor': 'pointer',
+        'transition': 'all 0.15s ease',
+        'flexDirection': 'column'
+    }
+    
+    return html.Div([
+        html.H2("Upload Multiple Sessions"),
+        html.P(
+            "Upload multiple session files (xlsx/csv) to analyze trends",
+            style={'color': COLORS['gray_500'], 'fontSize': '14px', 'marginBottom': '16px'}
+        ),
+        dcc.Upload(
+            id='upload-sessions',
+            children=html.Div([
+                html.Div('Drop multiple session files here', style={
+                    'fontSize': '15px',
+                    'fontWeight': '500',
+                    'color': COLORS['gray_700'],
+                    'marginBottom': '4px'
+                }),
+                html.Div('Accepts .xlsx and .csv files', style={
+                    'fontSize': '13px',
+                    'color': COLORS['gray_500']
+                }),
+                html.Div('or click to browse', style={
+                    'fontSize': '12px',
+                    'color': COLORS['gray_400'],
+                    'marginTop': '8px'
+                })
+            ]),
+            style={**upload_box_style, 'borderColor': COLORS['gray_300']},
+            multiple=True,
+            accept='.xlsx,.csv'
+        ),
+        html.Div(id='sessions-upload-status', style={'marginTop': '12px', 'fontSize': '13px'})
+    ], style=CARD_STYLE)
+
+
+def create_sessions_detailed_charts_section():
+    """Create the specific detailed charts section with rationale boxes"""
+    
+    def create_chart_with_rationale(title, chart_id, rationale_id):
+        return html.Div([
+            html.H3(title, style={'fontSize': '16px', 'marginBottom': '12px'}),
+            html.Div([
+                # Chart Container
+                html.Div([
+                    dcc.Graph(id=chart_id, config={'displayModeBar': True, 'displaylogo': False}, style={'height': '400px'})
+                ], style={
+                    'flex': '3', 
+                    'minWidth': '500px',
+                    'padding': '12px',
+                    'border': f'1px solid {COLORS["gray_200"]}',
+                    'borderRadius': '6px',
+                    'backgroundColor': COLORS['white']
+                }), 
+                
+                # Rationale Box Container
+                html.Div([
+                    html.H4("Rationale", style={'fontSize': '14px', 'color': COLORS['gray_600'], 'marginBottom': '8px'}),
+                    html.Div(id=rationale_id, style={
+                        'height': '360px', 
+                        'overflowY': 'auto',
+                        'padding': '12px',
+                        'backgroundColor': COLORS['gray_50'],
+                        'border': f'1px solid {COLORS["gray_200"]}',
+                        'borderRadius': '6px',
+                        'fontSize': '13px',
+                        'lineHeight': '1.5',
+                        'color': COLORS['gray_700'],
+                        'whiteSpace': 'pre-line'
+                    }, children="Click on a point to see rationale (showing last session by default).")
+                ], style={'flex': '1', 'minWidth': '300px'}) 
+                
+            ], style={'display': 'flex', 'flexDirection': 'row', 'flexWrap': 'wrap', 'gap': '24px', 'padding': '0 12px'})
+        ], style={**CARD_STYLE, 'marginBottom': '24px', 'marginTop': '12px'})
+
+    return html.Div([
+        # 1. Challenging vs Supporting
+        create_chart_with_rationale("Therapist Contribution (TCCS)", 'tccs-chart', 'tccs-rationale'),
+        
+        # 2. Activation vs Engagement
+        create_chart_with_rationale("Patient State (Activation & Engagement)", 'activation-engagement-chart', 'activation-rationale'),
+        
+        # 3. CTS Breakdown
+        create_chart_with_rationale("Competence Scale (CTS)", 'cts-chart', 'cts-rationale'),
+        
+    ], id='sessions-detailed-charts-section', style={'display': 'none', 'marginTop': '24px', 'padding': '0 12px'})
+
+
+def create_sessions_layout():
+    """Create the sessions page layout"""
+    return html.Div([
+        # Header
+        html.Div([
+            html.H1("GAINED - Sessions Analysis", style={
+                'textAlign': 'center',
+                'marginBottom': '4px',
+                'color': COLORS['gray_900']
+            }),
+            html.P("Analyze trends across multiple therapy sessions", style={
+                'textAlign': 'center',
+                'color': COLORS['gray_500'],
+                'fontSize': '14px',
+                'marginBottom': '24px'
+            }),
+            html.Div([
+                dcc.Link("← Back to Single Session Analysis", href="/", style={
+                    'color': COLORS['primary'],
+                    'fontSize': '14px',
+                    'textDecoration': 'none',
+                    'fontWeight': '500',
+                    'padding': '8px 16px',
+                    'backgroundColor': COLORS['white'],
+                    'borderRadius': '6px',
+                    'border': f'1px solid {COLORS["gray_200"]}',
+                    'display': 'inline-block'
+                })
+            ], style={'textAlign': 'center', 'marginBottom': '24px'})
+        ]),
+        
+        # Main Content
+        create_sessions_upload_section(),
+        # Removed generic chart section
+        create_sessions_detailed_charts_section(),
+        
+        # Data Stores for Sessions
+        dcc.Store(id='sessions-data'),
+        
+    ], style={
+        'maxWidth': '1200px',
+        'margin': '0 auto',
+        'padding': '24px',
+        'backgroundColor': COLORS['gray_100'],
+        'minHeight': '100vh'
+    })
+
+
 def create_layout():
-    """Create the main application layout"""
+    """Create the main application layout wrapper with routing"""
+    return html.Div([
+        dcc.Location(id='url', refresh=False),
+        html.Div(id='page-content')
+    ])
+
+
+def create_main_analysis_layout():
+    """Create the single session analysis layout (original layout)"""
     return html.Div([
         # Header
         html.Div([
@@ -258,6 +433,24 @@ def create_layout():
         create_metrics_section(),
         create_pie_chart_section(),
         create_field_plots_section(),
+        create_session_rationale_section(),
+        
+        # Navigation to Sessions
+        html.Div([
+            dcc.Link("Go to Multi-Session Analysis →", href="/sessions", style={
+                'display': 'block',
+                'width': '100%',
+                'padding': '16px',
+                'textAlign': 'center',
+                'backgroundColor': COLORS['white'],
+                'color': COLORS['primary'],
+                'fontWeight': '600',
+                'textDecoration': 'none',
+                'borderRadius': '8px',
+                'border': f'1px solid {COLORS["gray_200"]}',
+                'boxShadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+            })
+        ], style={'marginTop': '32px', 'marginBottom': '48px'}),
         
         # Data Stores
         dcc.Store(id='audio-data'),
