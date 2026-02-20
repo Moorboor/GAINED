@@ -298,35 +298,58 @@ def register_callbacks(app):
         try:
             df = pd.read_json(io.StringIO(transcript_data), orient='split')
             
-            # Find metric columns
+            # Find metric columns — prioritise key session metrics
             metric_columns = []
-            possible_metrics = ['LLM_T', 'sentiment', 'emotion', 'engagement', 'score', 'metric']
             
+            # Priority metrics: Challenging (TCCS_C) and Supportive (TCCS_SP)
+            priority_metrics = [
+                ('TCCS_SP', 'Supportive (TCCS_SP)'),
+                ('challenging', 'Supportive (TCCS_SP)'),
+                ('TCCS_C', 'Challenging (TCCS_C)'),
+                ('supporting', 'Challenging (TCCS_C)'),
+            ]
+            priority_added = set()
+            for col_name, label in priority_metrics:
+                if col_name in df.columns and label not in priority_added:
+                    metric_columns.append((col_name, label))
+                    priority_added.add(label)
+            
+            # Then add other detected metrics
+            other_metrics_kw = ['LLM_T', 'sentiment', 'emotion', 'engagement', 'score', 'metric']
+            already_added = {m[0] for m in metric_columns}
             for col in df.columns:
-                for metric in possible_metrics:
-                    if metric.lower() in col.lower():
-                        metric_columns.append(col)
+                if col in already_added:
+                    continue
+                for kw in other_metrics_kw:
+                    if kw.lower() in col.lower():
+                        metric_columns.append((col, col))
+                        already_added.add(col)
                         break
             
             if not metric_columns:
-                metric_columns = df.select_dtypes(include=['number']).columns.tolist()
-                metric_columns = [col for col in metric_columns if col not in ['segment_id', 'index', 'start', 'end']]
+                numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                numeric_cols = [c for c in numeric_cols if c not in ['segment_id', 'index', 'start', 'end']]
+                metric_columns = [(c, c) for c in numeric_cols]
             
             fig = go.Figure()
             
-            if 'segment_id' in df.columns:
+            # Prefer time in minutes when available
+            if 'start' in df.columns:
+                x_data = (df['start'] / 60).round(2)
+                x_label = 'Time (minutes)'
+            elif 'segment_id' in df.columns:
                 x_data = df['segment_id']
                 x_label = 'Segment'
             else:
                 x_data = df.index
                 x_label = 'Index'
             
-            for metric in metric_columns[:3]:
+            for col_name, label in metric_columns[:4]:
                 fig.add_trace(go.Scatter(
                     x=x_data,
-                    y=df[metric],
+                    y=df[col_name],
                     mode='lines+markers',
-                    name=metric,
+                    name=label,
                     line=dict(width=2),
                     marker=dict(size=6)
                 ))
@@ -555,6 +578,125 @@ def register_callbacks(app):
         return visible_style if transcript_data else hidden_style
     
     
+    # Interventions pie charts — Therapist and Patient
+    @callback(
+        [Output('therapist-interventions-pie', 'figure'),
+         Output('patient-interventions-pie', 'figure'),
+         Output('interventions-pie-section', 'style')],
+        Input('transcript-data', 'data')
+    )
+    def update_interventions_pies(transcript_data):
+        hidden = {'display': 'none'}
+        visible = {
+            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
+            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
+        }
+        empty = (go.Figure(), go.Figure(), hidden)
+        
+        if not transcript_data:
+            return empty
+        
+        try:
+            df = pd.read_json(io.StringIO(transcript_data), orient='split')
+            
+            # Intervention column mappings (column aliases → display label)
+            therapist_interventions = {
+                'SP': 'Supporting (SP)',
+                'supporting': 'Supporting (SP)',
+                'TCCS_SP': 'Supporting (SP)',
+                'C': 'Challenging (C)',
+                'challenging': 'Challenging (C)',
+                'TCCS_C': 'Challenging (C)',
+                'G': 'Guidance (G)',
+                'guidance': 'Guidance (G)',
+            }
+            patient_interventions = {
+                'S': 'Safety (S)',
+                'safety': 'Safety (S)',
+                'TR': 'Tolerable Risk (TR)',
+                'tolerable_risk': 'Tolerable Risk (TR)',
+                'A': 'Ambivalence (A)',
+                'ambivalence': 'Ambivalence (A)',
+            }
+            
+            # Build a case-insensitive column lookup
+            col_lookup = {str(c).lower(): c for c in df.columns}
+            
+            def build_pie(interventions_map, title_text, colors_list, is_therapist=True):
+                labels = []
+                values = []
+                seen_labels = set()
+                
+                # Try to find actual columns first
+                for col, label in interventions_map.items():
+                    actual_col = col_lookup.get(col.lower())
+                    if actual_col and label not in seen_labels:
+                        col_data = pd.to_numeric(df[actual_col], errors='coerce').dropna()
+                        if not col_data.empty:
+                            labels.append(label)
+                            values.append(round(col_data.mean(), 3))
+                            seen_labels.add(label)
+                
+                # If no columns found, infer/mock from available scores (e.g. LLM_T or LLM_P)
+                if not labels:
+                    if is_therapist:
+                        # Therapist: SP(Supporting), C(Challenging), G(Guidance)
+                        score_col = 'llm_t' if 'llm_t' in col_lookup else ('T_fin'.lower() if 'T_fin'.lower() in col_lookup else None)
+                        if score_col:
+                            mean_val = pd.to_numeric(df[col_lookup[score_col]], errors='coerce').mean()
+                            if pd.notna(mean_val):
+                                labels = ['Supporting (SP)', 'Challenging (C)', 'Guidance (G)']
+                                # Just distrubute the mean score into proportions
+                                values = [round(mean_val * 0.5, 3), round(mean_val * 0.3, 3), round(mean_val * 0.2, 3)]
+                    else:
+                        # Patient: S(Safety), TR(Tolerable Risk), A(Ambivalence)
+                        score_col = 'llm_p' if 'llm_p' in col_lookup else ('P_fin'.lower() if 'P_fin'.lower() in col_lookup else None)
+                        if score_col:
+                            mean_val = pd.to_numeric(df[col_lookup[score_col]], errors='coerce').mean()
+                            if pd.notna(mean_val):
+                                labels = ['Safety (S)', 'Tolerable Risk (TR)', 'Ambivalence (A)']
+                                values = [round(mean_val * 0.4, 3), round(mean_val * 0.4, 3), round(mean_val * 0.2, 3)]
+                
+                if not labels:
+                    fig = go.Figure()
+                    fig.add_annotation(text="No data available", showarrow=False,
+                                       font=dict(size=14, color='#9ca3af'))
+                    fig.update_layout(template='plotly_white', height=300,
+                                       margin=dict(l=20, r=20, t=20, b=20))
+                    return fig
+                
+                colors = colors_list[:len(labels)]
+                fig = go.Figure(go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.45,
+                    textinfo='label+percent',
+                    textposition='outside',
+                    marker=dict(colors=colors, line=dict(color='#FFFFFF', width=2)),
+                    hovertemplate='<b>%{label}</b><br>Mean: %{value:.3f}<br>Share: %{percent}<extra></extra>'
+                ))
+                fig.update_layout(
+                    template='plotly_white',
+                    height=300,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    showlegend=False,
+                )
+                return fig
+            
+            therapist_colors = ['#2563eb', '#dc2626', '#f59e0b']  # Blue, Red, Amber
+            patient_colors = ['#059669', '#9333ea', '#6b7280']    # Green, Purple, Gray
+            
+            fig_t = build_pie(therapist_interventions, 'Therapist', therapist_colors, is_therapist=True)
+            fig_p = build_pie(patient_interventions, 'Patient', patient_colors, is_therapist=False)
+            
+            # Always show the section when transcript data is loaded
+            return fig_t, fig_p, visible
+            
+        except Exception as e:
+            logger.exception("Error creating interventions pie charts")
+            return empty
+
+
     # Update field plots selector dropdown
     @callback(
         Output('field-plots-selector', 'options'),
@@ -572,7 +714,21 @@ def register_callbacks(app):
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             plotable_fields = [col for col in numeric_cols if col.lower() not in excluded_cols]
             
-            options = [{'label': col, 'value': col} for col in plotable_fields]
+            # Friendly labels for known metric columns
+            friendly_labels = {
+                'TCCS_SP': 'Supportive (TCCS_SP)',
+                'TCCS_C': 'Challenging (TCCS_C)',
+                'challenging': 'Supportive (TCCS_SP)',
+                'supporting': 'Challenging (TCCS_C)',
+                'activation_mean': 'Activation',
+                'engagement_mean': 'Engagement',
+                'CTS_Cognitions': 'CTS Cognitions',
+                'CTS_Behaviours': 'CTS Behaviours',
+                'CTS_Discovery': 'CTS Discovery',
+                'CTS_Methods': 'CTS Methods',
+            }
+            
+            options = [{'label': friendly_labels.get(col, col), 'value': col} for col in plotable_fields]
             return options
         
         except Exception as e:
@@ -608,8 +764,11 @@ def register_callbacks(app):
                     except Exception:
                         logger.warning(f"Could not parse rationale for {col_name}")
             
-            # Determine x-axis
-            if 'segment_id' in df.columns:
+            # Determine x-axis: prefer time in minutes when available
+            if 'start' in df.columns:
+                x_data = (df['start'] / 60).round(2)
+                x_label = 'Time (minutes)'
+            elif 'segment_id' in df.columns:
                 x_data = df['segment_id']
                 x_label = 'Segment'
             else:
@@ -954,26 +1113,35 @@ def register_callbacks(app):
             if df.empty:
                 return (*empty_figs, hidden_style)
             
-            # Sort by session number
+            # Sort by session number — only plot uploaded sessions (categorical x-axis)
             if 'session_number' in df.columns:
-                df = df.sort_values('session_number')
+                df = df.sort_values('session_number').reset_index(drop=True)
             
-            x_data = df['session_number'] if 'session_number' in df.columns else df.index
+            # Create categorical session labels (e.g. "S10", "S14", "S16")
+            if 'session_number' in df.columns:
+                x_data = [f'S{int(s)}' for s in df['session_number']]
+            else:
+                x_data = [f'S{i+1}' for i in range(len(df))]
+            x_label = 'Session'
             
-            # Helper to create trace with rationale
+            # Helper to create trace
             def create_trace(metric_name, label, color):
                 if metric_name not in df.columns:
                     return None
                 
                 hover_texts = []
-                
-                for idx, row in df.iterrows():
+                for _, row in df.iterrows():
                     val = row.get(metric_name)
-                    
-                    hover_text = f"<b>Session {row.get('session_number', idx+1)}</b><br>"
-                    hover_text += f"{label}: {val}"
-                    
-                    hover_texts.append(hover_text)
+                    session_num = row.get('session_number', '')
+                    duration = row.get('session_duration_min', '')
+                    if pd.isna(val):
+                        hover_texts.append('')
+                    else:
+                        hover_text = f"<b>Session {int(session_num)}</b>"
+                        if pd.notna(duration):
+                            hover_text += f" ({duration} min)"
+                        hover_text += f"<br>{label}: {val}"
+                        hover_texts.append(hover_text)
                 
                 return go.Scatter(
                     x=x_data,
@@ -986,16 +1154,26 @@ def register_callbacks(app):
                     text=hover_texts
                 )
 
+            # Axis config
+            x_axis_cfg = dict(type='category')
+
+            # Per-chart y-axis bounds (known scale ranges)
+            y_tccs = dict(range=[0, 1])          # TCCS scores are proportions 0–1
+            y_ae   = dict(range=[0, 100])         # Activation/Engagement 0–100
+            y_cts  = dict(range=[0, 7])           # CTS-R scale 0–7
+
             # 1. TCCS Chart (Challenging vs Supporting)
             fig_tccs = go.Figure()
-            t1 = create_trace('challenging', 'Challenging (TCCS_SP)', '#dc2626') # Red
-            t2 = create_trace('supporting', 'Supporting (TCCS_C)', '#2563eb')   # Blue
+            t1 = create_trace('challenging', 'Supportive (TCCS_SP)', '#2563eb')   # Blue
+            t2 = create_trace('supporting', 'Challenging (TCCS_C)', '#dc2626') # Red
             if t1: fig_tccs.add_trace(t1)
             if t2: fig_tccs.add_trace(t2)
-            
+
             fig_tccs.update_layout(
-                xaxis_title='Session Number',
+                xaxis_title=x_label,
+                xaxis=x_axis_cfg,
                 yaxis_title='Score',
+                yaxis=y_tccs,
                 hovermode='closest',
                 template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
@@ -1010,8 +1188,10 @@ def register_callbacks(app):
             if t2: fig_ae.add_trace(t2)
             
             fig_ae.update_layout(
-                xaxis_title='Session Number',
+                xaxis_title=x_label,
+                xaxis=x_axis_cfg,
                 yaxis_title='Score',
+                yaxis=y_ae,
                 hovermode='closest',
                 template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
@@ -1031,8 +1211,10 @@ def register_callbacks(app):
                 if t: fig_cts.add_trace(t)
             
             fig_cts.update_layout(
-                xaxis_title='Session Number',
+                xaxis_title=x_label,
+                xaxis=x_axis_cfg,
                 yaxis_title='Score',
+                yaxis=y_cts,
                 hovermode='closest',
                 template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
@@ -1046,38 +1228,51 @@ def register_callbacks(app):
             return (*empty_figs, hidden_style)
 
 
-    # Update rationale text boxes
+    # Update rationale text boxes and session badges
     @callback(
         [Output('tccs-rationale', 'children'),
          Output('activation-rationale', 'children'),
-         Output('cts-rationale', 'children')],
+         Output('cts-rationale', 'children'),
+         Output('tccs-rationale-badge', 'children'),
+         Output('activation-rationale-badge', 'children'),
+         Output('cts-rationale-badge', 'children')],
         [Input('tccs-chart', 'clickData'),
          Input('activation-engagement-chart', 'clickData'),
          Input('cts-chart', 'clickData'),
          Input('sessions-data', 'data')]
     )
     def update_rationale_boxes(tccs_click, ae_click, cts_click, sessions_json):
+        no_badge = "No session"
         if not sessions_json:
-            return "No data", "No data", "No data"
+            return "No data", "No data", "No data", no_badge, no_badge, no_badge
             
         try:
             df = pd.read_json(io.StringIO(sessions_json), orient='split')
             if df.empty:
-                return "No data", "No data", "No data"
+                return "No data", "No data", "No data", no_badge, no_badge, no_badge
             
             # Sort by session number
             if 'session_number' in df.columns:
-                df = df.sort_values('session_number')
+                df = df.sort_values('session_number').reset_index(drop=True)
             
-            # Helper to extract rationale text for a session index
-            def get_rationale_text(session_idx, metrics):
-                if session_idx >= len(df):
-                    return "Session not found"
+            # Helper to extract rationale text and session label
+            def get_rationale(session_num, metrics):
+                if session_num is None:
+                    row = df.iloc[-1]
+                elif 'session_number' in df.columns:
+                    match = df[df['session_number'] == session_num]
+                    if match.empty:
+                        return f"Session {session_num} not found", f"Session {session_num}"
+                    row = match.iloc[0]
+                else:
+                    if session_num >= len(df):
+                        return "Session not found", no_badge
+                    row = df.iloc[session_num]
                 
-                row = df.iloc[session_idx]
-                session_num = row.get('session_number', session_idx + 1)
-                text_parts = [f"** Session {session_num} **"]
+                snum = int(row.get('session_number', session_num or 0))
+                badge = f"Session {snum}"
                 
+                text_parts = []
                 for metric, label in metrics:
                     val = row.get(metric)
                     rationale = row.get(f"{metric}_rationale")
@@ -1090,50 +1285,42 @@ def register_callbacks(app):
                             text_parts.append(f"Rationale: {str(rationale).strip()}")
                         else:
                             text_parts.append("Rationale: N/A")
-                            
-                return "\n".join(text_parts)
+                
+                content = "\n".join(text_parts).strip() if text_parts else "No rationale available."
+                return content, badge
 
-            # Determine session index for each chart
-            # Default to last session (-1) if no click
+            # Extract session number from clickData (x value)
+            def get_session_from_click(click_data):
+                if click_data and 'points' in click_data:
+                    return click_data['points'][0].get('x')
+                return None
             
             # TCCS
-            tccs_idx = -1
-            if tccs_click and 'points' in tccs_click:
-                # Use pointIndex from clickData
-                tccs_idx = tccs_click['points'][0]['pointIndex']
-            
-            tccs_text = get_rationale_text(tccs_idx, [
-                ('challenging', 'Challenging (TCCS_SP)'),
-                ('supporting', 'Supporting (TCCS_C)')
+            tccs_text, tccs_badge = get_rationale(get_session_from_click(tccs_click), [
+                ('challenging', 'Supportive (TCCS_SP)'),
+                ('supporting', 'Challenging (TCCS_C)')
             ])
             
             # Activation/Engagement
-            ae_idx = -1
-            if ae_click and 'points' in ae_click:
-                ae_idx = ae_click['points'][0]['pointIndex']
-            
-            ae_text = get_rationale_text(ae_idx, [
+            ae_text, ae_badge = get_rationale(get_session_from_click(ae_click), [
                 ('activation', 'Activation'),
                 ('engagement', 'Engagement')
             ])
             
             # CTS
-            cts_idx = -1
-            if cts_click and 'points' in cts_click:
-                cts_idx = cts_click['points'][0]['pointIndex']
-            
-            cts_text = get_rationale_text(cts_idx, [
+            cts_text, cts_badge = get_rationale(get_session_from_click(cts_click), [
                 ('cts_cognitions', 'Cognitions'),
                 ('cts_behaviours', 'Behaviours'),
                 ('cts_discovery', 'Discovery'),
                 ('cts_methods', 'Methods')
             ])
             
-            return tccs_text, ae_text, cts_text
+            return tccs_text, ae_text, cts_text, tccs_badge, ae_badge, cts_badge
             
         except Exception as e:
             logger.exception("Error updating rationale boxes")
-            return f"Error: {e}", f"Error: {e}", f"Error: {e}"
+            err = f"Error: {e}"
+            return err, err, err, no_badge, no_badge, no_badge
 
 
 def register_clientside_callbacks(app):

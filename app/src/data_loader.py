@@ -479,6 +479,16 @@ def extract_metadata_from_session(file_buffer, filename):
         xl_file = pd.ExcelFile(file_buffer, engine='openpyxl')
         sheet_names = xl_file.sheet_names
         
+        # Extract session duration from the first (main) sheet
+        main_df = pd.read_excel(xl_file, sheet_name=sheet_names[0], engine='openpyxl')
+        if 'end' in main_df.columns:
+            try:
+                max_end = pd.to_numeric(main_df['end'], errors='coerce').max()
+                if pd.notna(max_end):
+                    result['session_duration_min'] = round(float(max_end) / 60, 1)
+            except Exception:
+                pass
+        
         # 1. Identify Sheets
         meta_sheet = next((s for s in sheet_names if s.lower() == 'metadata'), None)
         if not meta_sheet and len(sheet_names) > 1:
@@ -533,6 +543,26 @@ def extract_metadata_from_session(file_buffer, filename):
         return result
 
 
+def _extract_session_number(filename):
+    """
+    Extract session number from filename.
+    
+    Supports patterns like:
+      - "Sitzung 14_transcriptshare.xlsx"  -> 14
+      - "Session 3.xlsx"                    -> 3
+      - "session_05_data.csv"               -> 5
+    
+    Returns:
+        int or None: extracted session number, or None if not found
+    """
+    import re
+    # Match "Sitzung" or "Session" followed by a number (case-insensitive)
+    match = re.search(r'(?:sitzung|session)[_\s]*(\d+)', filename, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def process_sessions_upload(contents_list, filenames_list):
     """
     Process multiple session file uploads and extract metadata from each.
@@ -569,7 +599,10 @@ def process_sessions_upload(contents_list, filenames_list):
             
             # Extract metadata
             metadata = extract_metadata_from_session(io.BytesIO(decoded), filename)
-            metadata['session_number'] = idx + 1
+            
+            # Extract session number from filename; fall back to sequential index
+            session_num = _extract_session_number(filename)
+            metadata['session_number'] = session_num if session_num is not None else idx + 1
             sessions_data.append(metadata)
             
         except Exception as e:
@@ -577,6 +610,9 @@ def process_sessions_upload(contents_list, filenames_list):
     
     if not sessions_data:
         return None, " | ".join(errors) if errors else "No valid files uploaded"
+    
+    # Sort by session number so chart x-axis is ordered
+    sessions_data.sort(key=lambda s: s.get('session_number', 0))
     
     # Convert to JSON
     sessions_df = pd.DataFrame(sessions_data)
