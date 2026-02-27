@@ -6,6 +6,10 @@ test_video_splits_rationale/
 test_video_splits.zip
 test_video_splits_rationale.zip
 
+dag/UX.pptx
+dag/lib
+dag/transcriptions/*
+
 # Audio files
 *.mp3
 *.wav
