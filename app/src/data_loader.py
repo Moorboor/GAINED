@@ -195,11 +195,12 @@ def load_xlsx_with_sheets(file_path_or_buffer):
     Load xlsx file and return main sheet data and rationale sheets.
     
     Returns:
-        tuple: (main_df, rationale_dict) where:
+        tuple: (main_df, rationale_dict, turn_df) where:
             - main_df: DataFrame from the first sheet (main sheet)
             - rationale_dict: Dictionary mapping column names to their rationale DataFrames.
               Also includes '_session_rationale' key with session-level rationale text
               (dict of metric_name -> rationale_text).
+            - turn_df: DataFrame for the 'speech_turn' sheet, or None if not found.
     """
     try:
         xl_file = pd.ExcelFile(file_path_or_buffer, engine='openpyxl')
@@ -207,11 +208,18 @@ def load_xlsx_with_sheets(file_path_or_buffer):
         sheet_names = xl_file.sheet_names
         
         if not sheet_names:
-            return None, {}
+            return None, {}, None
         
         # First sheet is the main sheet
         main_df = pd.read_excel(xl_file, sheet_name=sheet_names[0], engine='openpyxl')
         main_df = _normalize_transcript_df(main_df)
+        
+        # Extract speech_turn sheet if exists
+        turn_df = None
+        turn_sheet = next((s for s in sheet_names if s.lower() in ('speech_turn', 'speech_turns', 'turnwise')), None)
+        if turn_sheet:
+            turn_df = pd.read_excel(xl_file, sheet_name=turn_sheet, engine='openpyxl')
+            turn_df = _normalize_transcript_df(turn_df)
         
         # Look for rationale sheets
         rationale_dict = {}
@@ -297,11 +305,11 @@ def load_xlsx_with_sheets(file_path_or_buffer):
                         # Keep all columns including key columns
                         rationale_dict[matching_column] = rationale_df
         
-        return main_df, rationale_dict
+        return main_df, rationale_dict, turn_df
     
     except Exception:
         logger.exception("Error loading xlsx with sheets")
-        return None, {}
+        return None, {}, None
 
 
 def load_session_with_rationale(patient_id, session_idx):
@@ -309,18 +317,19 @@ def load_session_with_rationale(patient_id, session_idx):
     Load session data including main sheet and rationale sheets.
     
     Returns:
-        tuple: (main_data_json, rationale_data_dict) where:
+        tuple: (main_data_json, rationale_data_dict, turn_data_json) where:
             - main_data_json: JSON string of main sheet data
             - rationale_data_dict: Dictionary mapping column names to rationale JSON strings
+            - turn_data_json: JSON string of speech_turn data, or None
     """
     if patient_id is None or session_idx is None:
-        return None, {}
+        return None, {}, None
     
     patient_path = os.path.join(DATA_PATH, patient_id)
     sessions = [s for s in os.listdir(patient_path) if s.endswith(('.xlsx', '.csv'))]
     
     if session_idx >= len(sessions):
-        return None, {}
+        return None, {}, None
     
     transcript_file = os.path.join(patient_path, sessions[session_idx])
     
@@ -330,26 +339,30 @@ def load_session_with_rationale(patient_id, session_idx):
             df = pd.read_csv(transcript_file)
             df = _normalize_transcript_df(df)
             main_data = df.to_json(date_format='iso', orient='split')
-            return main_data, {}
+            return main_data, {}, None
         else:
             # XLSX file - load with sheets
-            main_df, rationale_dict = load_xlsx_with_sheets(transcript_file)
+            main_df, rationale_dict, turn_df = load_xlsx_with_sheets(transcript_file)
             
             if main_df is None:
-                return None, {}
+                return None, {}, None
             
             main_data = main_df.to_json(date_format='iso', orient='split')
+            
+            turn_data = None
+            if turn_df is not None:
+                turn_data = turn_df.to_json(date_format='iso', orient='split')
             
             # Convert rationale DataFrames to JSON
             rationale_data_dict = {}
             for col_name, rationale_df in rationale_dict.items():
                 rationale_data_dict[col_name] = rationale_df.to_json(date_format='iso', orient='split')
             
-            return main_data, rationale_data_dict
+            return main_data, rationale_data_dict, turn_data
     
     except Exception:
         logger.exception("Error loading session with rationale")
-        return None, {}
+        return None, {}, None
 
 
 def process_transcript_upload_with_rationale(content, filename):
@@ -357,13 +370,13 @@ def process_transcript_upload_with_rationale(content, filename):
     Process uploaded transcript file and return main data and rationale data.
     
     Returns:
-        tuple: (main_data_json, rationale_data_dict, status_message)
+        tuple: (main_data_json, rationale_data_dict, turn_data_json, status_message)
     """
     if not content or not filename:
-        return None, {}, ""
+        return None, {}, None, ""
     
     if not filename.lower().endswith(('.xlsx', '.csv')):
-        return None, {}, f"⚠️ Unsupported transcript file: {filename}"
+        return None, {}, None, f"⚠️ Unsupported transcript file: {filename}"
     
     try:
         _, content_string = content.split(',', 1)
@@ -374,15 +387,19 @@ def process_transcript_upload_with_rationale(content, filename):
             df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
             df = _normalize_transcript_df(df)
             main_data = df.to_json(date_format='iso', orient='split')
-            return main_data, {}, f"✅ Transcript loaded: {filename} ({len(df)} segments)"
+            return main_data, {}, None, f"✅ Transcript loaded: {filename} ({len(df)} segments)"
         else:
             # XLSX file - load with sheets
-            main_df, rationale_dict = load_xlsx_with_sheets(io.BytesIO(decoded))
+            main_df, rationale_dict, turn_df = load_xlsx_with_sheets(io.BytesIO(decoded))
             
             if main_df is None:
-                return None, {}, f"❌ Error loading {filename}: Could not read main sheet"
+                return None, {}, None, f"❌ Error loading {filename}: Could not read main sheet"
             
             main_data = main_df.to_json(date_format='iso', orient='split')
+            
+            turn_data = None
+            if turn_df is not None:
+                turn_data = turn_df.to_json(date_format='iso', orient='split')
             
             # Convert rationale data to JSON-serializable format
             rationale_data_dict = {}
@@ -395,16 +412,16 @@ def process_transcript_upload_with_rationale(content, filename):
                 else:
                     rationale_data_dict[col_name] = rationale_val
             
-            rationale_count = len(rationale_dict)
+            rationale_count = len([k for k in rationale_dict.keys() if k != '_session_rationale'])
             status_msg = f"✅ Transcript loaded: {filename} ({len(main_df)} segments"
             if rationale_count > 0:
                 status_msg += f", {rationale_count} rationale sheet(s)"
             status_msg += ")"
             
-            return main_data, rationale_data_dict, status_msg
+            return main_data, rationale_data_dict, turn_data, status_msg
     
     except Exception as e:
-        return None, {}, f"❌ Error loading {filename}: {str(e)}"
+        return None, {}, None, f"❌ Error loading {filename}: {str(e)}"
 
 
 def extract_metadata_from_session(file_buffer, filename):
@@ -556,8 +573,8 @@ def _extract_session_number(filename):
         int or None: extracted session number, or None if not found
     """
     import re
-    # Match "Sitzung" or "Session" followed by a number (case-insensitive)
-    match = re.search(r'(?:sitzung|session)[_\s]*(\d+)', filename, re.IGNORECASE)
+    # Match "Sitzung", "Session", or "s_" followed by a number (case-insensitive)
+    match = re.search(r'(?:sitzung|session|s_)[_\s]*(\d+)', filename, re.IGNORECASE)
     if match:
         return int(match.group(1))
     return None

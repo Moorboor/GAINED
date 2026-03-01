@@ -176,35 +176,6 @@ def create_transcript_section():
     ], id='transcript-section', style={**CARD_STYLE, 'display': 'none'})
 
 
-def create_metrics_section():
-    """Create the metrics chart section"""
-    return html.Div([
-        html.H2("Session Metrics"),
-        dcc.Graph(id='metrics-chart', config={'displayModeBar': True, 'displaylogo': False})
-    ], id='chart-section', style={**CARD_STYLE, 'display': 'none'})
-
-
-def create_pie_chart_section():
-    """Create the pie chart section for patient speech-turn fields"""
-    return html.Div([
-        html.H2("Patient Speech Analysis"),
-        html.Div([
-            html.Label("Select field to visualize", style={
-                'fontSize': '13px',
-                'fontWeight': '500',
-                'color': COLORS['gray_600'],
-                'marginBottom': '8px',
-                'display': 'block'
-            }),
-            dcc.Dropdown(
-                id='pie-chart-field-selector',
-                placeholder="Select a field...",
-                style={'marginBottom': '16px'}
-            ),
-        ]),
-        dcc.Graph(id='pie-chart', config={'displayModeBar': True, 'displaylogo': False})
-    ], id='pie-chart-section', style={**CARD_STYLE, 'display': 'none'})
-
 
 def create_interventions_pie_section():
     """Create the interventions pie chart section showing Therapist and Patient intervention means"""
@@ -406,6 +377,15 @@ def create_sessions_detailed_charts_section():
         # 3. CTS Breakdown
         create_chart_with_rationale("Competence Scale (CTS)", 'cts-chart', 'cts-rationale'),
         
+        # 4. DAG Pipeline
+        html.Div([
+            html.H3("Psychometric Relationship Graph (DAG)"),
+            html.Iframe(
+                id='dag-iframe', 
+                style={'width': '100%', 'height': '800px', 'border': 'none', 'marginTop': '20px'}
+            )
+        ], style=CARD_STYLE)
+        
     ], id='sessions-detailed-charts-section', style={'display': 'none', 'marginTop': '24px', 'padding': '0 12px'})
 
 
@@ -487,8 +467,6 @@ def create_main_analysis_layout():
         create_upload_section(),
         create_audio_section(),
         create_transcript_section(),
-        create_metrics_section(),
-        create_pie_chart_section(),
         create_interventions_pie_section(),
         create_field_plots_section(),
         create_session_rationale_section(),
@@ -513,6 +491,7 @@ def create_main_analysis_layout():
         # Data Stores
         dcc.Store(id='audio-data'),
         dcc.Store(id='transcript-data'),
+        dcc.Store(id='turn-data'),
         dcc.Store(id='rationale-data', data={}),
         dcc.Store(id='current-time', data=0),
         dcc.Interval(id='playback-interval', interval=100, disabled=False),

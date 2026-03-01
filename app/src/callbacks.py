@@ -22,6 +22,8 @@ from .data_loader import (
 
 logger = logging.getLogger(__name__)
 
+import src.dag as dag
+
 
 def register_callbacks(app):
     """Register all callbacks for the application"""
@@ -40,6 +42,7 @@ def register_callbacks(app):
         [Output('audio-data', 'data'),
          Output('transcript-data', 'data'),
          Output('rationale-data', 'data'),
+         Output('turn-data', 'data'),
          Output('upload-status', 'children')],
         [Input('upload-audio', 'contents'),
          Input('upload-transcript', 'contents')],
@@ -58,6 +61,7 @@ def register_callbacks(app):
         audio_output = no_update
         transcript_output = no_update
         rationale_output = no_update
+        turn_output = no_update
         status_messages = []
         
         if triggered_id == 'upload-audio' and audio_content and audio_filename:
@@ -68,13 +72,15 @@ def register_callbacks(app):
                 status_messages.append(audio_msg)
         elif triggered_id == 'upload-transcript' and transcript_content and transcript_filename:
             # Use the new function that also loads rationale
-            new_transcript_data, new_rationale_data, transcript_msg = process_transcript_upload_with_rationale(
+            new_transcript_data, new_rationale_data, new_turn_data, transcript_msg = process_transcript_upload_with_rationale(
                 transcript_content, transcript_filename
             )
             if new_transcript_data:
                 transcript_output = new_transcript_data
             if new_rationale_data:
                 rationale_output = new_rationale_data
+            if new_turn_data:
+                turn_output = new_turn_data
             if transcript_msg:
                 status_messages.append(transcript_msg)
         else:
@@ -88,7 +94,7 @@ def register_callbacks(app):
                 }) for msg in status_messages
             ])
         
-        return audio_output, transcript_output, rationale_output, status_div
+        return audio_output, transcript_output, rationale_output, turn_output, status_div
     
     
     # Load existing session data
@@ -96,9 +102,9 @@ def register_callbacks(app):
         [Output('audio-data', 'data', allow_duplicate=True),
          Output('transcript-data', 'data', allow_duplicate=True),
          Output('rationale-data', 'data', allow_duplicate=True),
+         Output('turn-data', 'data', allow_duplicate=True),
          Output('audio-section', 'style'),
-         Output('transcript-section', 'style'),
-         Output('chart-section', 'style')],
+         Output('transcript-section', 'style')],
         Input('load-button', 'n_clicks'),
         [State('patient-dropdown', 'value'),
          State('session-dropdown', 'value')],
@@ -114,13 +120,13 @@ def register_callbacks(app):
         }
         
         # Load with rationale support
-        transcript_data, rationale_data = load_session_with_rationale(patient_id, session_idx)
+        transcript_data, rationale_data, turn_data = load_session_with_rationale(patient_id, session_idx)
         
         # Load audio separately (using old function for now)
         audio_data, _ = load_session_from_disk(patient_id, session_idx)
         
         if audio_data or transcript_data:
-            return audio_data, transcript_data, rationale_data, visible_style, visible_style, visible_style
+            return audio_data, transcript_data, rationale_data, turn_data, visible_style, visible_style
         
         raise PreventUpdate
     
@@ -128,8 +134,7 @@ def register_callbacks(app):
     # Show/hide sections when files are uploaded or loaded
     @callback(
         [Output('audio-section', 'style', allow_duplicate=True),
-         Output('transcript-section', 'style', allow_duplicate=True),
-         Output('chart-section', 'style', allow_duplicate=True)],
+         Output('transcript-section', 'style', allow_duplicate=True)],
         [Input('audio-data', 'data'),
          Input('transcript-data', 'data')],
         prevent_initial_call=True
@@ -143,9 +148,8 @@ def register_callbacks(app):
         
         audio_visible = visible_style if audio_data else hidden_style
         transcript_visible = visible_style if transcript_data else hidden_style
-        chart_visible = visible_style if transcript_data else hidden_style
         
-        return audio_visible, transcript_visible, chart_visible
+        return audio_visible, transcript_visible
     
     
     # Display audio player
@@ -286,306 +290,15 @@ def register_callbacks(app):
             return html.Div(f"Error loading transcript: {str(e)}")
     
     
-    # Display metrics chart
-    @callback(
-        Output('metrics-chart', 'figure'),
-        Input('transcript-data', 'data')
-    )
-    def display_metrics_chart(transcript_data):
-        if not transcript_data:
-            return go.Figure()
-        
-        try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
-            
-            # Find metric columns — prioritise key session metrics
-            metric_columns = []
-            
-            # Priority metrics: Challenging (TCCS_C) and Supportive (TCCS_SP)
-            priority_metrics = [
-                ('TCCS_SP', 'Supportive (TCCS_SP)'),
-                ('challenging', 'Supportive (TCCS_SP)'),
-                ('TCCS_C', 'Challenging (TCCS_C)'),
-                ('supporting', 'Challenging (TCCS_C)'),
-            ]
-            priority_added = set()
-            for col_name, label in priority_metrics:
-                if col_name in df.columns and label not in priority_added:
-                    metric_columns.append((col_name, label))
-                    priority_added.add(label)
-            
-            # Then add other detected metrics
-            other_metrics_kw = ['LLM_T', 'sentiment', 'emotion', 'engagement', 'score', 'metric']
-            already_added = {m[0] for m in metric_columns}
-            for col in df.columns:
-                if col in already_added:
-                    continue
-                for kw in other_metrics_kw:
-                    if kw.lower() in col.lower():
-                        metric_columns.append((col, col))
-                        already_added.add(col)
-                        break
-            
-            if not metric_columns:
-                numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-                numeric_cols = [c for c in numeric_cols if c not in ['segment_id', 'index', 'start', 'end']]
-                metric_columns = [(c, c) for c in numeric_cols]
-            
-            fig = go.Figure()
-            
-            # Prefer time in minutes when available
-            if 'start' in df.columns:
-                x_data = (df['start'] / 60).round(2)
-                x_label = 'Time (minutes)'
-            elif 'segment_id' in df.columns:
-                x_data = df['segment_id']
-                x_label = 'Segment'
-            else:
-                x_data = df.index
-                x_label = 'Index'
-            
-            for col_name, label in metric_columns[:4]:
-                fig.add_trace(go.Scatter(
-                    x=x_data,
-                    y=df[col_name],
-                    mode='lines+markers',
-                    name=label,
-                    line=dict(width=2),
-                    marker=dict(size=6)
-                ))
-            
-            fig.update_layout(
-                title='Session Metrics Over Time',
-                xaxis_title=x_label,
-                yaxis_title='Metric Value',
-                hovermode='x unified',
-                template='plotly_white',
-                height=400,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            
-            return fig
-        
-        except Exception as e:
-            logger.exception("Error creating chart")
-            return go.Figure()
-    
-    
-    # Update pie chart field selector dropdown
-    @callback(
-        Output('pie-chart-field-selector', 'options'),
-        Output('pie-chart-field-selector', 'value'),
-        Input('transcript-data', 'data')
-    )
-    def update_pie_chart_field_selector(transcript_data):
-        if not transcript_data:
-            return [], None
-        
-        try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
-            
-            # Find patient speech-turnvised fields (fields ending with _P)
-            # These are fields that have separate values for patient speech turns
-            patient_fields = []
-            excluded_cols = {'segment_id', 'index', 'start', 'end', 'text', 'segment_text', 'speaker', 'pred', 'speaker_text', 'num_words', 'words', 'wespeaker_div'}
-            
-            for col in df.columns:
-                col_lower = col.lower()
-                # Skip excluded columns
-                if col_lower in excluded_cols:
-                    continue
-                
-                # Look for fields ending with _P (patient-specific speech-turnvised fields)
-                if col.endswith('_P') or col.endswith('_p'):
-                    patient_fields.append(col)
-                # Also include categorical fields that might be emotion-related
-                elif df[col].dtype == 'object':
-                    # String columns that might be categorical
-                    if any(keyword in col_lower for keyword in ['emotion', 'sentiment', 'feeling', 'mood', 'affect']):
-                        patient_fields.insert(0, col)  # Prioritize emotion fields
-                    elif col_lower not in excluded_cols:
-                        # Other string columns (but we'll filter for patient turns when displaying)
-                        pass
-            
-            # If no _P fields found, look for any numeric fields that could be binned
-            if not patient_fields:
-                for col in df.columns:
-                    if col.lower() in excluded_cols:
-                        continue
-                    if df[col].dtype in ['int64', 'float64']:
-                        # Low-cardinality numeric might be categorical
-                        unique_count = df[col].nunique()
-                        total_count = len(df[col].dropna())
-                        if unique_count < 20 and unique_count < total_count * 0.9:
-                            patient_fields.append(col)
-            
-            options = [{'label': col, 'value': col} for col in patient_fields]
-            
-            # Auto-select first field if available
-            value = patient_fields[0] if patient_fields else None
-            
-            return options, value
-        
-        except Exception as e:
-            logger.exception("Error updating field selector")
-            return [], None
-    
-    
-    # Generate pie chart for patient speech-turn fields
-    @callback(
-        Output('pie-chart', 'figure'),
-        Input('pie-chart-field-selector', 'value'),
-        Input('transcript-data', 'data')
-    )
-    def generate_pie_chart(selected_field, transcript_data):
-        if not transcript_data or not selected_field:
-            return go.Figure()
-        
-        try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
-            
-            # Filter for patient speech turns only
-            # Check for speaker_text column (contains "P:" for patient, "T:" for therapist)
-            # or speaker column
-            patient_df = None
-            if 'speaker_text' in df.columns:
-                # Filter rows where speaker_text contains "P:"
-                patient_df = df[df['speaker_text'].astype(str).str.contains('^P:', case=False, na=False, regex=True)].copy()
-            elif 'speaker' in df.columns:
-                # Filter for patient speech turns
-                def is_patient(value):
-                    if pd.isna(value):
-                        return False
-                    value_str = str(value).strip().lower()
-                    return 'patient' in value_str or value_str.startswith('p')
-                
-                patient_df = df[df['speaker'].apply(is_patient)].copy()
-            else:
-                # If no speaker column, use all data (assume all are patient turns)
-                patient_df = df.copy()
-            
-            if patient_df.empty or selected_field not in patient_df.columns:
-                return go.Figure()
-            
-            # Get field data
-            field_data = patient_df[selected_field].dropna()
-            
-            if field_data.empty:
-                return go.Figure()
-            
-            # Handle numeric fields by binning them
-            if field_data.dtype in ['int64', 'float64']:
-                # For numeric fields, create bins
-                if field_data.min() == field_data.max():
-                    # All values are the same, just use the value
-                    value_counts = pd.Series([len(field_data)], index=[f'{field_data.iloc[0]:.3f}'])
-                else:
-                    # Create bins: use quantiles for better distribution
-                    try:
-                        # Try to create 5-10 bins based on data distribution
-                        n_bins = min(10, max(5, int(len(field_data) / 10)))
-                        if n_bins < 2:
-                            n_bins = 2
-                        
-                        # Use quantile-based bins for better visualization
-                        bins = pd.qcut(field_data, q=n_bins, duplicates='drop', precision=2)
-                        value_counts = bins.value_counts().sort_index()
-                        # Format bin labels
-                        value_counts.index = [str(interval) for interval in value_counts.index]
-                    except (ValueError, TypeError):
-                        # Fallback to equal-width bins
-                        bins = pd.cut(field_data, bins=min(10, field_data.nunique()), precision=2, duplicates='drop')
-                        value_counts = bins.value_counts().sort_index()
-                        value_counts.index = [str(interval) for interval in value_counts.index]
-            else:
-                # Categorical/string fields - use value counts directly
-                value_counts = field_data.value_counts()
-            
-            # Create subplots: pie chart + bar chart side by side
-            from plotly.subplots import make_subplots
-            
-            fig = make_subplots(
-                rows=1, cols=2,
-                specs=[[{"type": "pie"}, {"type": "bar"}]],
-                subplot_titles=[f'Distribution of {selected_field}', f'Distribution of {selected_field}'],
-                column_widths=[0.5, 0.5]
-            )
-            
-            # Colors
-            colors = px.colors.qualitative.Set3[:len(value_counts)]
-            
-            # 1. Donut Pie Chart (left)
-            fig.add_trace(go.Pie(
-                labels=value_counts.index.astype(str),
-                values=value_counts.values,
-                hole=0.4,
-                textinfo='label+percent',
-                textposition='outside',
-                marker=dict(
-                    colors=colors,
-                    line=dict(color='#FFFFFF', width=2)
-                ),
-                hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
-            ), row=1, col=1)
-            
-            # 2. Horizontal Bar Chart (right)
-            fig.add_trace(go.Bar(
-                y=value_counts.index.astype(str),
-                x=value_counts.values,
-                orientation='h',
-                marker=dict(color=colors),
-                hovertemplate='<b>%{y}</b><br>Count: %{x}<extra></extra>',
-                showlegend=False
-            ), row=1, col=2)
-            
-            fig.update_layout(
-                template='plotly_white',
-                height=500,
-                showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="middle",
-                    y=0.5,
-                    xanchor="center",
-                    x=0.5
-                ),
-                margin=dict(l=40, r=40, t=60, b=40)
-            )
-            
-            # Update bar chart axes
-            fig.update_xaxes(title_text="Count", row=1, col=2)
-            fig.update_yaxes(title_text=selected_field, row=1, col=2)
-            
-            return fig
-        
-        except Exception as e:
-            logger.exception("Error creating pie chart")
-            return go.Figure()
-    
-    
-    # Show/hide pie chart section when transcript data is available
-    @callback(
-        Output('pie-chart-section', 'style'),
-        Input('transcript-data', 'data')
-    )
-    def update_pie_chart_section_visibility(transcript_data):
-        visible_style = {
-            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
-            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
-        }
-        hidden_style = {'display': 'none'}
-        
-        return visible_style if transcript_data else hidden_style
-    
-    
     # Interventions pie charts — Therapist and Patient
     @callback(
         [Output('therapist-interventions-pie', 'figure'),
          Output('patient-interventions-pie', 'figure'),
          Output('interventions-pie-section', 'style')],
-        Input('transcript-data', 'data')
+        [Input('transcript-data', 'data'),
+         Input('turn-data', 'data')]
     )
-    def update_interventions_pies(transcript_data):
+    def update_interventions_pies(transcript_data, turn_data):
         hidden = {'display': 'none'}
         visible = {
             'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
@@ -593,11 +306,12 @@ def register_callbacks(app):
         }
         empty = (go.Figure(), go.Figure(), hidden)
         
-        if not transcript_data:
+        target_data = turn_data if turn_data else transcript_data
+        if not target_data:
             return empty
         
         try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
+            df = pd.read_json(io.StringIO(target_data), orient='split')
             
             # Intervention column mappings (column aliases → display label)
             therapist_interventions = {
@@ -637,25 +351,7 @@ def register_callbacks(app):
                             values.append(round(col_data.mean(), 3))
                             seen_labels.add(label)
                 
-                # If no columns found, infer/mock from available scores (e.g. LLM_T or LLM_P)
-                if not labels:
-                    if is_therapist:
-                        # Therapist: SP(Supporting), C(Challenging), G(Guidance)
-                        score_col = 'llm_t' if 'llm_t' in col_lookup else ('T_fin'.lower() if 'T_fin'.lower() in col_lookup else None)
-                        if score_col:
-                            mean_val = pd.to_numeric(df[col_lookup[score_col]], errors='coerce').mean()
-                            if pd.notna(mean_val):
-                                labels = ['Supporting (SP)', 'Challenging (C)', 'Guidance (G)']
-                                # Just distrubute the mean score into proportions
-                                values = [round(mean_val * 0.5, 3), round(mean_val * 0.3, 3), round(mean_val * 0.2, 3)]
-                    else:
-                        # Patient: S(Safety), TR(Tolerable Risk), A(Ambivalence)
-                        score_col = 'llm_p' if 'llm_p' in col_lookup else ('P_fin'.lower() if 'P_fin'.lower() in col_lookup else None)
-                        if score_col:
-                            mean_val = pd.to_numeric(df[col_lookup[score_col]], errors='coerce').mean()
-                            if pd.notna(mean_val):
-                                labels = ['Safety (S)', 'Tolerable Risk (TR)', 'Ambivalence (A)']
-                                values = [round(mean_val * 0.4, 3), round(mean_val * 0.4, 3), round(mean_val * 0.2, 3)]
+                # Mock data removed to avoid displaying fake proportions when actual intervention probabilities are missing.
                 
                 if not labels:
                     fig = go.Figure()
@@ -1292,7 +988,13 @@ def register_callbacks(app):
             # Extract session number from clickData (x value)
             def get_session_from_click(click_data):
                 if click_data and 'points' in click_data:
-                    return click_data['points'][0].get('x')
+                    x_val = click_data['points'][0].get('x')
+                    if isinstance(x_val, str) and x_val.startswith('S'):
+                        try:
+                            return int(x_val[1:])
+                        except ValueError:
+                            pass
+                    return x_val
                 return None
             
             # TCCS
@@ -1321,6 +1023,24 @@ def register_callbacks(app):
             logger.exception("Error updating rationale boxes")
             err = f"Error: {e}"
             return err, err, err, no_badge, no_badge, no_badge
+
+
+    # Update the DAG Iframe
+    @callback(
+        Output('dag-iframe', 'srcDoc'),
+        Input('sessions-data', 'data')
+    )
+    def update_session_dag(sessions_json):
+        if not sessions_json:
+            return ""
+        
+        try:
+            df = pd.read_json(io.StringIO(sessions_json), orient='split')
+            html_string = dag.create_session_dag_from_json(df)
+            return html_string
+        except Exception as e:
+            logger.exception("Error creating session DAG:")
+            return f"<div style='color:red; padding: 20px;'>Failed to render DAG: {e}</div>"
 
 
 def register_clientside_callbacks(app):
