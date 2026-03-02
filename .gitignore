@@ -8,7 +8,6 @@ test_video_splits_rationale.zip
 
 dag/UX.pptx
 dag/lib
-dag/transcriptions/*
 
 # Audio files
 *.mp3
