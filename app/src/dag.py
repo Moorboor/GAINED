@@ -6,25 +6,30 @@ from pyvis.network import Network
 
 # Placeholders for the 500-session population data.
 # Replace these values with the actual population statistics.
-POPULATION_MEAN = {
-    "Challenging": 0.5,
-    "Supportive": 0.5,
-    "Alliance": 5.0,
-    "Activation": 50.0,
-    "Engagement": 50.0,
-    "Cognitive Therapy": 3.0,
-    "HSCL_4": 2.5
-}
+def preprocess_df(df):
+  '''Takes dataframe and drops columns'''
+  df["name"] = df["filename"].apply(lambda x: x.lower().split()[0].replace(",", ""))
+  df["date"] = df["filename"].apply(lambda x: x.lower().split()[3].replace(",", ""))
+  df["date"] = pd.to_datetime(df["date"], format="%d.%m.%Y")
+  df = df[["name", "date", "TCCS_C", "TCCS_SP", "ALLIANCE", "activation_mean", "engagement_mean", 'CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods','HSCL_4_5']]
+  
+  df_cts = df.filter(regex=r"^CTS", axis=1).map(lambda x: float(x) if type(x)==int else np.nan)
+  df["cognitive_therapy"] = np.nanmean(df_cts, axis=1)
+  df = df.drop(columns=['CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods'])
+  df = df.rename(columns={"TCCS_C": "Challenging",
+                "TCCS_SP": "Supportive",
+                "ALLIANCE": "Alliance",
+                "activation_mean": "Activation",
+                "engagement_mean": "Engagement",
+                "cognitive_therapy": "Cognitive Therapy",
+                "HSCL_4_5": "HSCL_4"})
+  return df
 
-POPULATION_STD = {
-    "Challenging": 0.2,
-    "Supportive": 0.2,
-    "Alliance": 1.0,
-    "Activation": 15.0,
-    "Engagement": 15.0,
-    "Cognitive Therapy": 1.5,
-    "HSCL_4": 0.8
-}
+df = pd.read_excel(os.path.join(os.path.dirname(os.path.abspath("")), "dag", "transcriptions", "combined_data_rationale.xlsx"))
+df = preprocess_df(df)
+POPULATION_MEAN = df[df.columns[2:]].apply(lambda x: np.nanmean(x))
+POPULATION_STD =  df[df.columns[2:]].apply(lambda x: np.nanstd(x))
+
 
 
 class DAG():
@@ -74,7 +79,7 @@ class DAG():
         }
       },
       "physics": {
-        "enabled": true,
+        "enabled": false,
         "hierarchicalRepulsion": {
           "centralGravity": 0.0,
           "springLength": 100,
@@ -131,7 +136,7 @@ class DAG():
       # Match Dash app color scheme with slightly softer variants if needed
       color = "#059669" # Success Green for level 1
       font_color = "#ffffff"
-      shape = "box" 
+      shape = "ellipse" 
       
       if i==0:
         color = "#2563eb" # Primary Blue for level 0
@@ -161,22 +166,23 @@ class DAG():
       new_node_values = df_z.iloc[i].to_dict()
       
       for key, value in new_node_values.items():
-          # Handle NaN smoothly
-          if pd.isna(value):
-              d = {
-                  "font": {"size": 16, "color": "#ffffff"},
-                  "title": f"Data Missing (NaN)",
-                  "label": f"{key}" # Hidden NaN tag
-              }
-          else:
-              font_size = max(16, min(24, (16 + 3*value)))
-              d = {
-                  "font": {"size": font_size, "color": "#ffffff"},
-                  "title": f"Z-Score: {value:.2f}",
-                  "label": f"{key}\nz: {value:.2f}"
-              }
+
+        # Handle NaN smoothly
+        if pd.isna(value):
+          d = {
+              "font": {"size": 16, "color": "#ffffff"},
+              "title": f"Data Missing (NaN)",
+          }
+        else:
+          font_size = max(14, min(35, (22 + 10*value)))
+          d = {
+              "font": {"size": font_size, "color": "#ffffff"},
+              "title": f"Z-Score: {value:.2f}",
+          }
+        if key == "Alliance" or key == "HSCL_4":
+          d["shape"] = "box"
           
-          new_node_values[key] = d
+        new_node_values[key] = d
     
     return new_node_values
 
@@ -212,7 +218,6 @@ def create_session_dag_from_json(df):
         "HSCL_4_5": "HSCL_4",
         "session_number": "session_number"
     }
-    
     plot_df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
     
     # Calculate Cognitive Therapy composite if the CTS fields exist
@@ -239,10 +244,10 @@ def create_session_dag_from_json(df):
     # Convert Population Dictionaries to Series for vectorised math
     p_mean_series = pd.Series(POPULATION_MEAN)
     p_std_series = pd.Series(POPULATION_STD)
-    
+
     # Calculate Z scores using rolling window of 5
     df_z = get_z_values(df=metric_df, p_mean_series=p_mean_series, p_std_series=p_std_series, window=5)
-    
+    print(metric_df)
     # Fill any missing/NaN z-scores with 0 (representing exactly the population mean) 
     # This prevents the UI from showing ugly NaN blocks for incomplete datasets.
     df_z = df_z.fillna(0)

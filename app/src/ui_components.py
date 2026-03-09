@@ -463,14 +463,6 @@ def create_main_analysis_layout():
             })
         ]),
         
-        # Main Content
-        create_upload_section(),
-        create_audio_section(),
-        create_transcript_section(),
-        create_interventions_pie_section(),
-        create_field_plots_section(),
-        create_session_rationale_section(),
-        
         # Navigation to Sessions
         html.Div([
             dcc.Link("Go to Multi-Session Analysis →", href="/sessions", style={
@@ -487,6 +479,14 @@ def create_main_analysis_layout():
                 'boxShadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
             })
         ], style={'marginTop': '32px', 'marginBottom': '48px'}),
+        
+        # Main Content
+        create_upload_section(),
+        create_audio_section(),
+        create_transcript_section(),
+        create_interventions_pie_section(),
+        create_field_plots_section(),
+        create_session_rationale_section(),
         
         # Data Stores
         dcc.Store(id='audio-data'),
