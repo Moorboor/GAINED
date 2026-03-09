@@ -11,7 +11,7 @@ def preprocess_df(df):
   df["name"] = df["filename"].apply(lambda x: x.lower().split()[0].replace(",", ""))
   df["date"] = df["filename"].apply(lambda x: x.lower().split()[3].replace(",", ""))
   df["date"] = pd.to_datetime(df["date"], format="%d.%m.%Y")
-  df = df[["name", "date", "TCCS_C", "TCCS_SP", "ALLIANCE", "activation_mean", "engagement_mean", 'CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods','HSCL_4_5']]
+  df = df[["name", "date", "TCCS_C", "TCCS_SP", "ALLIANCE", "activation_mean", "engagement_mean", 'CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods','HSCL_4_5']].copy()
   
   df_cts = df.filter(regex=r"^CTS", axis=1).map(lambda x: float(x) if type(x)==int else np.nan)
   df["cognitive_therapy"] = np.nanmean(df_cts, axis=1)

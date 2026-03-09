@@ -395,21 +395,22 @@ def register_callbacks(app):
 
     # Update field plots selector dropdown
     @callback(
-        Output('field-plots-selector', 'options'),
+        [Output('field-plots-selector', 'options'),
+         Output('field-plots-selector', 'value')],
         Input('transcript-data', 'data')
     )
     def update_field_plots_selector(transcript_data):
         if not transcript_data:
-            return []
-        
+            return [], []
+
         try:
             df = pd.read_json(io.StringIO(transcript_data), orient='split')
-            
+
             # Find numeric fields that can be plotted
             excluded_cols = {'segment_id', 'index', 'start', 'end'}
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             plotable_fields = [col for col in numeric_cols if col.lower() not in excluded_cols]
-            
+
             # Friendly labels for known metric columns
             friendly_labels = {
                 'TCCS_SP': 'Supportive (TCCS_SP)',
@@ -423,13 +424,18 @@ def register_callbacks(app):
                 'CTS_Discovery': 'CTS Discovery',
                 'CTS_Methods': 'CTS Methods',
             }
-            
+
             options = [{'label': friendly_labels.get(col, col), 'value': col} for col in plotable_fields]
-            return options
-        
+
+            # Default selection: prefer 'challenging' and 'supporting', fall back to TCCS_SP/TCCS_C
+            default_cols = ['challenging', 'supporting', 'TCCS_SP', 'TCCS_C']
+            default_value = [col for col in default_cols if col in plotable_fields][:2]
+
+            return options, default_value
+
         except Exception as e:
             logger.exception("Error updating field plots selector")
-            return []
+            return [], []
     
     
     # Display field plots with rationale
@@ -809,22 +815,22 @@ def register_callbacks(app):
             if df.empty:
                 return (*empty_figs, hidden_style)
             
-            # Sort by session number — only plot uploaded sessions (categorical x-axis)
+            # Sort by session number — only plot uploaded sessions
             if 'session_number' in df.columns:
                 df = df.sort_values('session_number').reset_index(drop=True)
-            
-            # Create categorical session labels (e.g. "S10", "S14", "S16")
+
+            # Use numeric session numbers as x values so missing sessions create gaps
             if 'session_number' in df.columns:
-                x_data = [f'S{int(s)}' for s in df['session_number']]
+                x_data = [int(s) for s in df['session_number']]
             else:
-                x_data = [f'S{i+1}' for i in range(len(df))]
+                x_data = list(range(1, len(df) + 1))
             x_label = 'Session'
-            
+
             # Helper to create trace
             def create_trace(metric_name, label, color):
                 if metric_name not in df.columns:
                     return None
-                
+
                 hover_texts = []
                 for _, row in df.iterrows():
                     val = row.get(metric_name)
@@ -838,7 +844,7 @@ def register_callbacks(app):
                             hover_text += f" ({duration} min)"
                         hover_text += f"<br>{label}: {val}"
                         hover_texts.append(hover_text)
-                
+
                 return go.Scatter(
                     x=x_data,
                     y=df[metric_name],
@@ -850,8 +856,13 @@ def register_callbacks(app):
                     text=hover_texts
                 )
 
-            # Axis config
-            x_axis_cfg = dict(type='category')
+            # Axis config: linear so missing session numbers appear as gaps
+            x_axis_cfg = dict(
+                type='linear',
+                tickmode='array',
+                tickvals=x_data,
+                ticktext=[f'S{n}' for n in x_data]
+            )
 
             # Per-chart y-axis bounds (known scale ranges)
             y_tccs = dict(range=[0, 1])          # TCCS scores are proportions 0–1

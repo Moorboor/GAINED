@@ -466,19 +466,17 @@ def create_main_analysis_layout():
         # Navigation to Sessions
         html.Div([
             dcc.Link("Go to Multi-Session Analysis →", href="/sessions", style={
-                'display': 'block',
-                'width': '100%',
-                'padding': '16px',
-                'textAlign': 'center',
-                'backgroundColor': COLORS['white'],
                 'color': COLORS['primary'],
-                'fontWeight': '600',
+                'fontSize': '14px',
                 'textDecoration': 'none',
-                'borderRadius': '8px',
+                'fontWeight': '500',
+                'padding': '8px 16px',
+                'backgroundColor': COLORS['white'],
+                'borderRadius': '6px',
                 'border': f'1px solid {COLORS["gray_200"]}',
-                'boxShadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+                'display': 'inline-block'
             })
-        ], style={'marginTop': '32px', 'marginBottom': '48px'}),
+        ], style={'textAlign': 'center', 'marginTop': '16px', 'marginBottom': '16px'}),
         
         # Main Content
         create_upload_section(),
