@@ -1036,6 +1036,28 @@ def register_callbacks(app):
             return err, err, err, no_badge, no_badge, no_badge
 
 
+    # Highlight clicked dot in each multi-session chart
+    def _make_highlight_callback(chart_id):
+        @callback(
+            Output(chart_id, 'figure', allow_duplicate=True),
+            Input(chart_id, 'clickData'),
+            State(chart_id, 'figure'),
+            prevent_initial_call=True
+        )
+        def highlight_clicked_dot(click_data, fig):
+            if not click_data or not fig:
+                raise PreventUpdate
+            clicked_x = click_data['points'][0].get('x')
+            for trace in fig.get('data', []):
+                xs = trace.get('x', [])
+                n = len(xs)
+                sizes = [16 if xs[i] == clicked_x else 8 for i in range(n)]
+                trace.setdefault('marker', {})['size'] = sizes
+            return fig
+
+    for _chart_id in ['tccs-chart', 'activation-engagement-chart', 'cts-chart']:
+        _make_highlight_callback(_chart_id)
+
     # Update the DAG Iframe
     @callback(
         Output('dag-iframe', 'srcDoc'),
@@ -1052,6 +1074,8 @@ def register_callbacks(app):
         except Exception as e:
             logger.exception("Error creating session DAG:")
             return f"<div style='color:red; padding: 20px;'>Failed to render DAG: {e}</div>"
+
+
 
 
 def register_clientside_callbacks(app):
