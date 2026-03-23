@@ -23,8 +23,9 @@ DIR_PATH = os.path.dirname(ABS_PATH)
 
 df = pd.read_excel(os.path.join(DIR_PATH, "dag", "transcriptions", "combined_data_rationale.xlsx"))
 df = preprocess_df(df)
-POPULATION_MEAN = df[df.columns[2:]].apply(lambda x: np.nanmean(x))
-POPULATION_STD =  df[df.columns[2:]].apply(lambda x: np.nanstd(x))
+# Calculate population statistics for ALL columns (not skipping TCCS_C, TCCS_SP)
+POPULATION_MEAN = df.apply(lambda x: np.nanmean(x))
+POPULATION_STD = df.apply(lambda x: np.nanstd(x))
 
 
 def get_definition_dict():
@@ -181,10 +182,17 @@ class DAG():
           }
         else:
           font_size = max(14, min(50, (22 + 20*value)))
+          # Use .iloc for positional indexing to avoid FutureWarning
+          try:
+              title_text = f"Z-Score: {value:.2f}, {DEFINITIONS[key].iloc[3]}"
+              label_text = f"{DEFINITIONS[key].iloc[2]}"
+          except (KeyError, IndexError):
+              title_text = f"Z-Score: {value:.2f}"
+              label_text = key
           d = {
               "font": {"size": font_size, "color": "#ffffff"},
-              "title": f"Z-Score: {value:.2f}, {DEFINITIONS[key][3]}",
-              "label": f"{DEFINITIONS[key][2]}",
+              "title": title_text,
+              "label": label_text,
           }
           if key in ["ALLIANCE", "HSCL_4_5", "EPO-1"]:
             d["shape"] = "box"
@@ -212,10 +220,15 @@ def create_session_dag_from_json(df):
     """
     Generate the DAG HTML string from the provided multidimensional session dataframe.
     """
-    # print([df[col] for col in df.columns])
     if df.empty:
         return ""
-      
+    
+    # Debug: Print available columns in input dataframe
+    print("\n" + "="*60)
+    print("DAG DATA LOADING DEBUG")
+    print("="*60)
+    print(f"Input columns: {list(df.columns)}")
+    print(f"Number of sessions: {len(df)}")
 
     # Standardize column names to match the DAG expected nodes
     rename_map = {
@@ -223,7 +236,7 @@ def create_session_dag_from_json(df):
         "supporting": "TCCS_SP",
         "activation": "activation_mean",
         "engagement": "engagement_mean",
-    } # other columns still missing because df lacks of columns
+    }
     plot_df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
      
     # Calculate Cognitive Therapy composite if the CTS fields exist
@@ -245,6 +258,14 @@ def create_session_dag_from_json(df):
         
     # Narrow down to just metrics
     metric_df = plot_df[required_cols].copy()
+    
+    # Debug: Print the required fields and their values
+    print(f"\nRequired fields for DAG:")
+    for col in required_cols:
+        values = metric_df[col].tolist()
+        has_data = not all(pd.isna(v) for v in values)
+        print(f"  {col}: {values} {'✓' if has_data else '✗ (all NaN)'}")
+    print("="*60 + "\n")
 
     # Calculate Z scores using rolling window of 5
     df_z = get_z_values(df=metric_df, p_mean_series=pd.Series(POPULATION_MEAN), p_std_series=pd.Series(POPULATION_STD), window=5)

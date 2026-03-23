@@ -298,10 +298,13 @@ def create_sessions_upload_section():
 def create_sessions_detailed_charts_section():
     """Create the specific detailed charts section with rationale boxes"""
     
-    def create_chart_with_rationale(title, chart_id, rationale_id):
+    def create_chart_with_rationale(title, chart_id, rationale_id, extra_controls=None):
         badge_id = f'{rationale_id}-badge'
         return html.Div([
-            html.H3(title, style={'fontSize': '16px', 'marginBottom': '12px'}),
+            html.Div([
+                html.H3(title, style={'fontSize': '16px', 'marginBottom': '12px', 'display': 'inline-block'}),
+                extra_controls if extra_controls else html.Span()
+            ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'space-between', 'flexWrap': 'wrap', 'gap': '12px'}),
             html.Div([
                 # Chart Container
                 html.Div([
@@ -367,6 +370,30 @@ def create_sessions_detailed_charts_section():
             ], style={'display': 'flex', 'flexDirection': 'row', 'flexWrap': 'wrap', 'gap': '24px', 'padding': '0 12px'})
         ], style={**CARD_STYLE, 'marginBottom': '24px', 'marginTop': '12px'})
 
+    # CTS line selection checklist
+    cts_line_selector = html.Div([
+        dcc.Checklist(
+            id='cts-line-selector',
+            options=[
+                {'label': ' Cognitions', 'value': 'cts_cognitions'},
+                {'label': ' Behaviours', 'value': 'cts_behaviours'},
+                {'label': ' Discovery', 'value': 'cts_discovery'},
+                {'label': ' Methods', 'value': 'cts_methods'},
+                {'label': ' Mean', 'value': 'cts_mean'},
+            ],
+            value=['cts_cognitions', 'cts_behaviours', 'cts_discovery', 'cts_methods', 'cts_mean'],
+            inline=True,
+            style={'fontSize': '13px'},
+            inputStyle={'marginRight': '4px'},
+            labelStyle={'marginRight': '16px', 'display': 'inline-flex', 'alignItems': 'center'}
+        )
+    ], style={
+        'padding': '8px 12px',
+        'backgroundColor': COLORS['gray_50'],
+        'borderRadius': '6px',
+        'border': f'1px solid {COLORS["gray_200"]}',
+    })
+
     return html.Div([
         # 1. Challenging vs Supporting
         create_chart_with_rationale("Therapist Contribution (TCCS)", 'tccs-chart', 'tccs-rationale'),
@@ -374,8 +401,8 @@ def create_sessions_detailed_charts_section():
         # 2. Activation vs Engagement
         create_chart_with_rationale("Patient State (Activation & Engagement)", 'activation-engagement-chart', 'activation-rationale'),
         
-        # 3. CTS Breakdown
-        create_chart_with_rationale("Competence Scale (CTS)", 'cts-chart', 'cts-rationale'),
+        # 3. CTS Breakdown with line selector
+        create_chart_with_rationale("Competence Scale (CTS)", 'cts-chart', 'cts-rationale', extra_controls=cts_line_selector),
         
         # 4. DAG Pipeline
         html.Div([

@@ -458,12 +458,12 @@ def extract_metadata_from_session(file_buffer, filename):
             'rationale': ['homework_rationale']
         },
         'challenging': {
-            'metric': ['TCCS_SP', 'challenging'], 
-            'rationale': ['TCCS_SP_rationale', 'challenging_rationale']
+            'metric': ['TCCS_C', 'challenging'], 
+            'rationale': ['TCCS_C_rationale', 'challenging_rationale']
         },
         'supporting': {
-            'metric': ['TCCS_C', 'supporting'], 
-            'rationale': ['TCCS_C_rationale', 'supporting_rationale']
+            'metric': ['TCCS_SP', 'supporting'], 
+            'rationale': ['TCCS_SP_rationale', 'supporting_rationale']
         },
         'cts_cognitions': {
             'metric': ['CTS_Cognitions', 'cognitions'], 

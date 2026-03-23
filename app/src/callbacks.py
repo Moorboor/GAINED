@@ -791,11 +791,10 @@ def register_callbacks(app):
         return sessions_json, status_div
 
 
-    # Update sessions charts
+    # Update sessions charts (TCCS and Activation/Engagement only - CTS handled separately)
     @callback(
         [Output('tccs-chart', 'figure'),
          Output('activation-engagement-chart', 'figure'),
-         Output('cts-chart', 'figure'),
          Output('sessions-detailed-charts-section', 'style')],
         [Input('sessions-data', 'data')]
     )
@@ -804,7 +803,7 @@ def register_callbacks(app):
         detailed_section_style = {'display': 'block', 'marginTop': '24px', 'padding': '0 12px'}
         hidden_style = {'display': 'none'}
         
-        empty_figs = (go.Figure(), go.Figure(), go.Figure())
+        empty_figs = (go.Figure(), go.Figure())
         
         if not sessions_json:
             return (*empty_figs, hidden_style)
@@ -867,7 +866,6 @@ def register_callbacks(app):
             # Per-chart y-axis bounds (known scale ranges)
             y_tccs = dict(range=[0, 1])          # TCCS scores are proportions 0–1
             y_ae   = dict(range=[0, 100])         # Activation/Engagement 0–100
-            y_cts  = dict(range=[0, 7])           # CTS-R scale 0–7
 
             # 1. TCCS Chart (Challenging vs Supporting)
             fig_tccs = go.Figure()
@@ -904,18 +902,124 @@ def register_callbacks(app):
                 margin=dict(l=40, r=40, t=30, b=40),
                 legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
             )
+            
+            return fig_tccs, fig_ae, detailed_section_style
+            
+        except Exception as e:
+            logger.exception("Error updating sessions charts")
+            return (*empty_figs, hidden_style)
 
-            # 3. CTS Chart
+
+    # Update CTS chart with line selection
+    @callback(
+        Output('cts-chart', 'figure'),
+        [Input('sessions-data', 'data'),
+         Input('cts-line-selector', 'value')]
+    )
+    def update_cts_chart(sessions_json, selected_lines):
+        if not sessions_json:
+            return go.Figure()
+        
+        if not selected_lines:
+            selected_lines = []
+        
+        try:
+            df = pd.read_json(io.StringIO(sessions_json), orient='split')
+            
+            if df.empty:
+                return go.Figure()
+            
+            # Sort by session number
+            if 'session_number' in df.columns:
+                df = df.sort_values('session_number').reset_index(drop=True)
+
+            # Use numeric session numbers as x values
+            if 'session_number' in df.columns:
+                x_data = [int(s) for s in df['session_number']]
+            else:
+                x_data = list(range(1, len(df) + 1))
+            x_label = 'Session'
+
+            # Calculate overall mean of all CTS metrics across all sessions (single value)
+            cts_cols = ['cts_cognitions', 'cts_behaviours', 'cts_discovery', 'cts_methods']
+            existing_cts_cols = [c for c in cts_cols if c in df.columns]
+            overall_mean = None
+            if existing_cts_cols:
+                all_values = df[existing_cts_cols].values.flatten()
+                all_values = all_values[~pd.isna(all_values)]
+                if len(all_values) > 0:
+                    overall_mean = float(all_values.mean())
+
+            # Helper to create trace
+            def create_trace(metric_name, label, color, dash_style=None):
+                if metric_name not in df.columns:
+                    return None
+
+                hover_texts = []
+                for _, row in df.iterrows():
+                    val = row.get(metric_name)
+                    session_num = row.get('session_number', '')
+                    duration = row.get('session_duration_min', '')
+                    if pd.isna(val):
+                        hover_texts.append('')
+                    else:
+                        hover_text = f"<b>Session {int(session_num)}</b>"
+                        if pd.notna(duration):
+                            hover_text += f" ({duration} min)"
+                        hover_text += f"<br>{label}: {val:.2f}"
+                        hover_texts.append(hover_text)
+
+                line_config = dict(width=3, color=color)
+                if dash_style:
+                    line_config['dash'] = dash_style
+
+                return go.Scatter(
+                    x=x_data,
+                    y=df[metric_name],
+                    mode='lines+markers',
+                    name=label,
+                    line=line_config,
+                    marker=dict(size=8),
+                    hovertemplate='%{text}<extra></extra>',
+                    text=hover_texts
+                )
+
+            # Axis config
+            x_axis_cfg = dict(
+                type='linear',
+                tickmode='array',
+                tickvals=x_data,
+                ticktext=[f'S{n}' for n in x_data]
+            )
+            y_cts = dict(range=[0, 7])  # CTS-R scale 0–7
+
+            # CTS Chart with selectable lines
             fig_cts = go.Figure()
+            
             cts_metrics = [
-                ('cts_cognitions', 'Cognitions', '#ea580c'),   # Orange
-                ('cts_behaviours', 'Behaviours', '#0891b2'),   # Cyan
-                ('cts_discovery', 'Discovery', '#db2777'),     # Pink
-                ('cts_methods', 'Methods', '#4f46e5')          # Indigo
+                ('cts_cognitions', 'Cognitions', '#ea580c'),     # Orange
+                ('cts_behaviours', 'Behaviours', '#0891b2'),     # Cyan
+                ('cts_discovery', 'Discovery', '#db2777'),       # Pink
+                ('cts_methods', 'Methods', '#4f46e5'),           # Indigo
             ]
+            
             for metric, label, color in cts_metrics:
-                t = create_trace(metric, label, color)
-                if t: fig_cts.add_trace(t)
+                if metric in selected_lines:
+                    t = create_trace(metric, label, color)
+                    if t:
+                        fig_cts.add_trace(t)
+            
+            # Add horizontal mean line if selected and data exists
+            if 'cts_mean' in selected_lines and overall_mean is not None:
+                x_range = [min(x_data), max(x_data)]
+                fig_cts.add_trace(go.Scatter(
+                    x=x_range,
+                    y=[overall_mean, overall_mean],
+                    mode='lines',
+                    name=f'Mean ({overall_mean:.2f})',
+                    line=dict(width=2, color='#111827', dash='dash'),
+                    hovertemplate=f'<b>Overall Mean</b>: {overall_mean:.2f}<extra></extra>'
+                ))
             
             fig_cts.update_layout(
                 xaxis_title=x_label,
@@ -928,11 +1032,11 @@ def register_callbacks(app):
                 legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
             )
             
-            return fig_tccs, fig_ae, fig_cts, detailed_section_style
+            return fig_cts
             
         except Exception as e:
-            logger.exception("Error updating sessions charts")
-            return (*empty_figs, hidden_style)
+            logger.exception("Error updating CTS chart")
+            return go.Figure()
 
 
     # Update rationale text boxes and session badges
