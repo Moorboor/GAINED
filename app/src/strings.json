@@ -1,0 +1,102 @@
+{
+  "de": {
+    "lang_label": "Sprache",
+
+    "sessions_title": "GAINED – Sitzungsanalyse",
+    "sessions_subtitle": "Verläufe über mehrere Therapiesitzungen analysieren",
+    "sessions_back_link": "← Zurück zur Einzelsitzungsanalyse",
+    "sessions_nav_link": "Zur Mehrsitzungsanalyse →",
+
+    "upload_title": "Mehrere Sitzungen hochladen",
+    "upload_subtitle": "Mehrere Sitzungsdateien (xlsx/csv) hochladen, um Verläufe zu analysieren",
+    "upload_drop": "Sitzungsdateien hier ablegen",
+    "upload_formats": "Akzeptiert .xlsx und .csv Dateien",
+    "upload_browse": "oder hier klicken",
+
+    "rationale_title": "Begründung",
+    "rationale_placeholder": "Auf einen Punkt klicken, um die Begründung zu sehen.",
+    "rationale_no_session": "Keine Sitzung",
+
+    "chart_tccs": "Therapeutenbeitrag (TCCS)",
+    "chart_ae": "Patientenstatus (Aktivierung & Engagement)",
+    "chart_cts": "Kompetenzskala (CTS)",
+    "chart_dag": "Psychometrischer Beziehungsgraph (DAG)",
+
+    "legend_supportive": "Supportiv",
+    "legend_challenging": "Herausfordernd",
+    "legend_activation": "Aktivierung",
+    "legend_engagement": "Engagement",
+    "legend_cognitions": "Kognitionen",
+    "legend_behaviours": "Verhaltensanalyse",
+    "legend_discovery": "Geleitetes Entdecken",
+    "legend_methods": "Änderungsinterventionen",
+    "legend_mean": "PT-Kompetenz",
+    "legend_alliance": "Allianz",
+    "legend_epo": "Wohlbefinden",
+
+    "tooltip_supportive": "Supportiv-stützendes Therapeutenverhalten: Der Therapeut hört aufmerksam zu, zeigt Verständnis und fasst wichtige Punkte zusammen. Skala 0–100 – je höher, desto häufiger dieses Verhalten.",
+    "tooltip_challenging": "Herausforderndes Therapeutenverhalten: Der Therapeut regt den Patienten an, neue Perspektiven einzunehmen und über bekannte Denk- und Verhaltensmuster hinauszugehen. Skala 0–100.",
+    "tooltip_activation": "Verhaltensaktivierung: Wie aktiv war der Patient in der letzten Woche? Skala 0–100 – je höher, desto aktiver laut KI-Assessment.",
+    "tooltip_engagement": "Engagement: Wie aktiv bringt sich der Patient in die Therapie ein (Hausaufgaben, Übungen)? Skala 0–100 – je höher, desto stärker das Engagement laut KI-Assessment.",
+    "tooltip_cognitions": "Kognitionen (CTS_Cognitions): Der Therapeut hilft dem Patienten, belastende Gedanken und Grundüberzeugungen zu erkennen. Skala 0–6 – je höher, desto besser gelingt Einsicht oder Veränderung.",
+    "tooltip_behaviours": "Verhaltensanalyse (CTS_Behaviours): Verhaltensmuster erkennen und neue Verhaltensweisen entwickeln. Skala 0–6 – je höher, desto wirksamer die Verhaltensarbeit.",
+    "tooltip_discovery": "Geleitetes Entdecken (CTS_Discovery): Der Therapeut arbeitet mit offenen Fragen, um Reflexion und neue Einsichten zu fördern. Skala 0–6.",
+    "tooltip_methods": "Änderungsinterventionen (CTS_Methods): Vielfalt und Geschick beim Einsatz von Methoden zur Veränderung von Gedanken oder Verhalten. Skala 0–6.",
+    "tooltip_mean": "PT-Kompetenz (CTS_MEAN): Gesamtbewertung der therapeutischen Fertigkeiten – Gedanken- und Verhaltensanalyse, geleitetes Entdecken und Änderungsinterventionen. Inklusive Flexibilität und Umgang mit Problemen.",
+    "tooltip_alliance": "Allianz (ALLIANCE): Die therapeutische Allianz aus Sicht des Patienten – Vertrauen, gemeinsame Ziele und gegenseitige Unterstützung. Skala 0–5.",
+    "tooltip_epo": "Wohlbefinden (EPO-1): Subjektiv wahrgenommenes emotionales und psychisches Funktionsniveau. Skala 0–100 – je höher, desto besser das Wohlbefinden.",
+
+    "main_title": "GAINED",
+    "main_subtitle": "Therapiesitzungsanalyse"
+  },
+  "en": {
+    "lang_label": "Language",
+
+    "sessions_title": "GAINED – Sessions Analysis",
+    "sessions_subtitle": "Analyze trends across multiple therapy sessions",
+    "sessions_back_link": "← Back to Single Session Analysis",
+    "sessions_nav_link": "Go to Multi-Session Analysis →",
+
+    "upload_title": "Upload Multiple Sessions",
+    "upload_subtitle": "Upload multiple session files (xlsx/csv) to analyze trends",
+    "upload_drop": "Drop multiple session files here",
+    "upload_formats": "Accepts .xlsx and .csv files",
+    "upload_browse": "or click to browse",
+
+    "rationale_title": "Rationale",
+    "rationale_placeholder": "Click on a point to see rationale.",
+    "rationale_no_session": "No session",
+
+    "chart_tccs": "Therapist Contribution (TCCS)",
+    "chart_ae": "Patient State (Activation & Engagement)",
+    "chart_cts": "Competence Scale (CTS)",
+    "chart_dag": "Psychometric Relationship Graph (DAG)",
+
+    "legend_supportive": "Supportive",
+    "legend_challenging": "Challenging",
+    "legend_activation": "Activation",
+    "legend_engagement": "Engagement",
+    "legend_cognitions": "Cognitions",
+    "legend_behaviours": "Behaviour Analysis",
+    "legend_discovery": "Guided Discovery",
+    "legend_methods": "Change Interventions",
+    "legend_mean": "Therapist Skill",
+    "legend_alliance": "Alliance",
+    "legend_epo": "Well-being",
+
+    "tooltip_supportive": "Supportive therapist behaviour (TCCS_SP): The therapist listens attentively, shows understanding, and summarises key points. Scale 0–100 – the higher the value, the more frequently this behaviour was shown.",
+    "tooltip_challenging": "Challenging therapist behaviour (TCCS_C): The therapist encourages the patient to adopt new perspectives and move beyond familiar thinking and behavioural patterns. Scale 0–100.",
+    "tooltip_activation": "Behavioural Activation (activation_mean): How active was the patient in the past week? Scale 0–100 – the higher, the more active according to the AI assessment.",
+    "tooltip_engagement": "Engagement (engagement_mean): How actively does the patient engage in therapy (homework, exercises)? Scale 0–100 – the higher, the stronger the engagement according to the AI assessment.",
+    "tooltip_cognitions": "Cognitions (CTS_Cognitions): The therapist helps the patient identify distressing thoughts and core beliefs. Scale 0–6 – the higher, the better the therapist facilitates insight or change.",
+    "tooltip_behaviours": "Behaviour Analysis (CTS_Behaviours): Identifying behavioural patterns and developing new behaviours. Scale 0–6 – the higher, the more effective the behavioural work.",
+    "tooltip_discovery": "Guided Discovery (CTS_Discovery): The therapist uses open questions to promote reflection and new insights. Scale 0–6.",
+    "tooltip_methods": "Change Interventions (CTS_Methods): Variety and skill in applying methods to change thoughts or behaviour. Scale 0–6.",
+    "tooltip_mean": "Therapist Skill (CTS_MEAN): Overall assessment of therapeutic competencies – cognitive and behavioural analysis, guided discovery, and change interventions. Includes flexibility and handling of problems.",
+    "tooltip_alliance": "Alliance (ALLIANCE): The therapeutic alliance from the patient's perspective – trust, shared goals, and mutual support. Scale 0–5.",
+    "tooltip_epo": "Well-being (EPO-1): Subjectively perceived emotional and psychological functioning level. Scale 0–100 – the higher, the better the well-being.",
+
+    "main_title": "GAINED",
+    "main_subtitle": "Therapy Session Analysis"
+  }
+}

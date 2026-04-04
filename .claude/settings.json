@@ -7,7 +7,8 @@
       "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('ok'\\)\")",
       "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c ':*)",
       "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('ok'\\)\")",
-      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; print\\('ok'\\)\")"
+      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; print\\('ok'\\)\")",
+      "Bash(grep -n \"z.score\\\\|zscore\\\\|z_score\\\\|zscores\" /Users/ali/Desktop/GAINED/dag/*.py -i)"
     ]
   }
 }

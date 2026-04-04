@@ -2,7 +2,9 @@
 Callbacks for GAINED application
 """
 import io
+import json
 import logging
+import os
 
 import dash
 import pandas as pd
@@ -25,9 +27,168 @@ logger = logging.getLogger(__name__)
 import src.dag as dag
 
 
+_STRINGS_PATH = os.path.join(os.path.dirname(__file__), 'strings.json')
+with open(_STRINGS_PATH, 'r', encoding='utf-8') as _f:
+    _STRINGS = json.load(_f)
+
+def _t(lang, key):
+    return _STRINGS.get(lang, _STRINGS['de']).get(key, key)
+
+
 def register_callbacks(app):
     """Register all callbacks for the application"""
-    
+
+    # Language store: dropdown → store
+    @callback(Output('lang', 'data'), Input('lang-dropdown', 'value'))
+    def update_lang(value):
+        return value or 'de'
+
+    # Sessions page language updates (only exist when on /sessions)
+    @callback(
+        [Output('sessions-title', 'children'),
+         Output('sessions-subtitle', 'children'),
+         Output('sessions-back-link', 'children'),
+         Output('upload-title', 'children'),
+         Output('upload-subtitle', 'children'),
+         Output('upload-drop', 'children'),
+         Output('upload-formats', 'children'),
+         Output('upload-browse', 'children'),
+         Output('chart-title-tccs', 'children'),
+         Output('chart-title-ae', 'children'),
+         Output('chart-title-cts', 'children'),
+         Output('chart-title-dag', 'children'),
+         Output('tccs-rationale-title', 'children'),
+         Output('activation-rationale-title', 'children'),
+         Output('cts-rationale-title', 'children'),
+         ],
+        Input('lang', 'data'),
+        prevent_initial_call=True,
+    )
+    def update_sessions_language(lang):
+        lang = lang or 'de'
+        rt = _t(lang, 'rationale_title')
+        return [
+            _t(lang, 'sessions_title'),
+            _t(lang, 'sessions_subtitle'),
+            _t(lang, 'sessions_back_link'),
+            _t(lang, 'upload_title'),
+            _t(lang, 'upload_subtitle'),
+            _t(lang, 'upload_drop'),
+            _t(lang, 'upload_formats'),
+            _t(lang, 'upload_browse'),
+            _t(lang, 'chart_tccs'),
+            _t(lang, 'chart_ae'),
+            _t(lang, 'chart_cts'),
+            _t(lang, 'chart_dag'),
+            rt, rt, rt,
+        ]
+
+    # Main page language updates (only exist when on /)
+    @callback(
+        [Output('main-subtitle', 'children'),
+         Output('main-nav-link', 'children')],
+        Input('lang', 'data'),
+        prevent_initial_call=True,
+    )
+    def update_main_language(lang):
+        lang = lang or 'de'
+        return [_t(lang, 'main_subtitle'), _t(lang, 'sessions_nav_link')]
+
+    # Legend definitions per language — mirrors make_legend in ui_components
+    _LEGEND_DEFS = {
+        'tccs-line-selector': [
+            ('challenging', 'legend_supportive',  'tooltip_supportive',  '#2563eb'),
+            ('supporting',  'legend_challenging', 'tooltip_challenging', '#dc2626'),
+        ],
+        'ae-line-selector': [
+            ('activation', 'legend_activation', 'tooltip_activation', '#9333ea'),
+            ('engagement', 'legend_engagement', 'tooltip_engagement', '#059669'),
+            ('alliance',   'legend_alliance',   'tooltip_alliance',   '#f59e0b'),
+            ('epo_1',      'legend_epo',        'tooltip_epo',        '#0ea5e9'),
+        ],
+        'cts-line-selector': [
+            ('cts_cognitions', 'legend_cognitions', 'tooltip_cognitions', '#ea580c'),
+            ('cts_behaviours', 'legend_behaviours', 'tooltip_behaviours', '#0891b2'),
+            ('cts_discovery',  'legend_discovery',  'tooltip_discovery',  '#db2777'),
+            ('cts_methods',    'legend_methods',    'tooltip_methods',    '#4f46e5'),
+            ('cts_mean',       'legend_mean',       'tooltip_mean',       '#111827'),
+        ],
+    }
+
+    def _build_legend_items(selector_id, lang, selected_values):
+        from .ui_components import COLORS
+        items = []
+        for value, label_key, tooltip_key, color in _LEGEND_DEFS[selector_id]:
+            opacity = '1' if (selected_values and value in selected_values) else '0.35'
+            items.append(html.Div([
+                html.Span(style={
+                    'display': 'inline-block', 'width': '24px', 'height': '4px',
+                    'backgroundColor': color, 'borderRadius': '2px',
+                    'marginRight': '5px', 'verticalAlign': 'middle', 'flexShrink': '0',
+                }),
+                html.Span(_t(lang, label_key), style={'verticalAlign': 'middle'}),
+                html.Span([
+                    html.Span('i', style={
+                        'display': 'inline-flex', 'alignItems': 'center', 'justifyContent': 'center',
+                        'width': '13px', 'height': '13px', 'borderRadius': '50%',
+                        'backgroundColor': COLORS['gray_300'], 'color': COLORS['white'],
+                        'fontSize': '9px', 'fontStyle': 'italic', 'fontWeight': 'bold',
+                        'cursor': 'help', 'lineHeight': '1',
+                    }),
+                    html.Span(_t(lang, tooltip_key), className='legend-popover'),
+                ], className='legend-info-wrap', style={'marginLeft': '4px', 'flexShrink': '0'}),
+            ],
+            id={'type': 'legend-item', 'selector': selector_id, 'value': value},
+            n_clicks=0,
+            **{'data-value': value, 'data-selector': selector_id},
+            style={
+                'display': 'inline-flex', 'alignItems': 'center',
+                'marginRight': '16px', 'cursor': 'pointer',
+                'fontSize': '13px', 'userSelect': 'none',
+                'opacity': opacity, 'transition': 'opacity 0.15s',
+            }))
+        return items
+
+    # Rebuild legend items only on lang change (not on checklist value changes)
+    @callback(
+        [Output('tccs-line-selector-legend', 'children'),
+         Output('ae-line-selector-legend', 'children'),
+         Output('cts-line-selector-legend', 'children')],
+        Input('lang', 'data'),
+        [State('tccs-line-selector', 'value'),
+         State('ae-line-selector', 'value'),
+         State('cts-line-selector', 'value')],
+        prevent_initial_call=True,
+    )
+    def update_legend_language(lang, tccs_vals, ae_vals, cts_vals):
+        lang = lang or 'de'
+        return [
+            _build_legend_items('tccs-line-selector', lang, tccs_vals),
+            _build_legend_items('ae-line-selector', lang, ae_vals),
+            _build_legend_items('cts-line-selector', lang, cts_vals),
+        ]
+
+    # Opacity-only update when checklist values change (no DOM rebuild)
+    for _sid in ['tccs-line-selector', 'ae-line-selector', 'cts-line-selector']:
+        @callback(
+            Output({'type': 'legend-item', 'selector': _sid, 'value': dash.dependencies.ALL}, 'style'),
+            Input(_sid, 'value'),
+            State({'type': 'legend-item', 'selector': _sid, 'value': dash.dependencies.ALL}, 'id'),
+            _sid=_sid,
+        )
+        def sync_legend_opacity(selected_values, item_ids, _sid=_sid):
+            selected_values = selected_values or []
+            base = {
+                'display': 'inline-flex', 'alignItems': 'center',
+                'marginRight': '16px', 'cursor': 'pointer',
+                'fontSize': '13px', 'userSelect': 'none',
+                'transition': 'opacity 0.15s',
+            }
+            return [
+                {**base, 'opacity': '1' if item_id['value'] in selected_values else '0.35'}
+                for item_id in item_ids
+            ]
+
     # Update session dropdown based on patient selection
     @callback(
         Output('session-dropdown', 'options'),
@@ -914,49 +1075,55 @@ def register_callbacks(app):
         try:
             df, x_data, x_label, x_axis_cfg, create_trace = result
             fig = go.Figure()
-            ae_metrics = [
-                ('activation', 'Activation', '#9333ea'),
-                ('engagement', 'Engagement', '#059669'),
+            # primary y-axis (0–100): activation, engagement, epo_1
+            # secondary y-axis (0–5): alliance
+            primary_metrics = [
+                ('activation', 'Aktivierung',   '#9333ea'),
+                ('engagement', 'Engagement',     '#059669'),
+                ('epo_1',      'Wohlbefinden',   '#0ea5e9'),
+            ]
+            secondary_metrics = [
+                ('alliance', 'Allianz', '#f59e0b'),
             ]
             show_bands = len(df) >= 2
+            has_secondary = False
 
-            for metric, label, color in ae_metrics:
+            for metric, label, color in primary_metrics:
                 if metric not in selected_lines or metric not in df.columns:
                     continue
-
                 y_vals = pd.to_numeric(df[metric], errors='coerce')
-
-                # Error band (1 std across all sessions)
                 if show_bands:
-                    std = float(y_vals.std(ddof=1))
-                    y_upper = (y_vals + std).clip(upper=100).tolist()
-                    y_lower = (y_vals - std).clip(lower=0).tolist()
-                    x_band = x_data + x_data[::-1]
-                    y_band = y_upper + y_lower[::-1]
-                    fig.add_trace(go.Scatter(
-                        x=x_band,
-                        y=y_band,
-                        fill='toself',
-                        fillcolor=color,
-                        opacity=0.12,
-                        line=dict(width=0),
-                        hoverinfo='skip',
-                        showlegend=False,
-                        name=f'{label} ±1 SD'
-                    ))
-
-                # Main line trace
+                    _add_error_band(fig, x_data, y_vals, color, y_min=0, y_max=100)
                 t = create_trace(metric, label, color)
                 if t:
                     fig.add_trace(t)
 
-            fig.update_layout(
+            for metric, label, color in secondary_metrics:
+                if metric not in selected_lines or metric not in df.columns:
+                    continue
+                has_secondary = True
+                y_vals = pd.to_numeric(df[metric], errors='coerce')
+                if show_bands:
+                    _add_error_band(fig, x_data, y_vals, color, y_min=0, y_max=5)
+                t = create_trace(metric, label, color)
+                if t:
+                    t.update(yaxis='y2')
+                    fig.add_trace(t)
+
+            layout_kwargs = dict(
                 xaxis_title=x_label, xaxis=x_axis_cfg,
-                yaxis_title='Score', yaxis=dict(range=[0, 100]),
+                yaxis=dict(title='Score (0–100)', range=[0, 100]),
                 hovermode='closest', template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
                 showlegend=False,
             )
+            if has_secondary:
+                layout_kwargs['yaxis2'] = dict(
+                    title='Allianz (0–5)', range=[0, 5],
+                    overlaying='y', side='right',
+                    showgrid=False,
+                )
+            fig.update_layout(**layout_kwargs)
             return fig
         except Exception:
             logger.exception("Error updating Activation/Engagement chart")
@@ -1231,29 +1398,83 @@ def register_callbacks(app):
     for _chart_id in ['tccs-chart', 'activation-engagement-chart', 'cts-chart']:
         _make_highlight_callback(_chart_id)
 
-    # Update the DAG Iframe
+    # Update the DAG Iframe + z-score bar
     @callback(
-        Output('dag-iframe', 'srcDoc'),
+        [Output('dag-iframe', 'srcDoc'),
+         Output('dag-zscores', 'children')],
         Input('sessions-data', 'data')
     )
     def update_session_dag(sessions_json):
         if not sessions_json:
-            return ""
-        
+            return "", None
+
         try:
             df = pd.read_json(io.StringIO(sessions_json), orient='split')
-            html_string = dag.create_session_dag_from_json(df)
-            return html_string
+            html_string, last_z = dag.create_session_dag_from_json(df)
+
+            # Build z-score pill bar
+            from .ui_components import COLORS
+
+            # Use DAG DEFINITIONS for labels (row index 2 = short label), fallback to key
+            def _dag_label(key):
+                try:
+                    return dag.DEFINITIONS[key].iloc[2]
+                except (KeyError, IndexError):
+                    return key
+
+            def z_color(z):
+                if z > 1:   return ('#166534', '#dcfce7')   # green: above avg
+                if z < -1:  return ('#991b1b', '#fee2e2')   # red: below avg
+                return ('#374151', '#f3f4f6')                # neutral
+
+            pills = []
+            for col, z in last_z.items():
+                label = _dag_label(col)
+                fg, bg = z_color(z)
+                sign = '+' if z >= 0 else ''
+                pills.append(html.Div([
+                    html.Span(label, style={'fontWeight': '500', 'marginRight': '6px'}),
+                    html.Span(f'{sign}{z:.2f}', style={'fontFamily': 'monospace', 'fontSize': '12px'}),
+                ], style={
+                    'display': 'inline-flex', 'alignItems': 'center',
+                    'padding': '4px 10px', 'borderRadius': '999px',
+                    'backgroundColor': bg, 'color': fg,
+                    'fontSize': '12px', 'marginRight': '6px', 'marginBottom': '4px',
+                    'border': f'1px solid {fg}22',
+                }))
+
+            zscore_bar = html.Div([
+                html.Span('Z-Scores (letzte Sitzung): ', style={
+                    'fontSize': '12px', 'color': COLORS['gray_500'],
+                    'marginRight': '8px', 'whiteSpace': 'nowrap',
+                }),
+                html.Div(pills, style={'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center'}),
+            ], style={'display': 'flex', 'alignItems': 'flex-start', 'flexWrap': 'wrap'})
+
+            return html_string, zscore_bar
+
         except Exception as e:
             logger.exception("Error creating session DAG:")
-            return f"<div style='color:red; padding: 20px;'>Failed to render DAG: {e}</div>"
+            return f"<div style='color:red; padding: 20px;'>Failed to render DAG: {e}</div>", None
 
 
 
 
 def register_clientside_callbacks(app):
     """Register all clientside (JavaScript) callbacks"""
-    
+
+    # Restore lang-dropdown from the store on page load, triggered by URL (not store)
+    app.clientside_callback(
+        """
+        function(pathname, lang) {
+            return lang || 'de';
+        }
+        """,
+        Output('lang-dropdown', 'value'),
+        Input('url', 'pathname'),
+        State('lang', 'data'),
+    )
+
     # Initialize wavesurfer with speaker regions
     app.clientside_callback(
         """
@@ -1753,24 +1974,4 @@ def register_clientside_callbacks(app):
                 values.append(clicked_value)
             return values
 
-    # Sync legend item opacity with checklist state
-    for selector_id in ['tccs-line-selector', 'ae-line-selector', 'cts-line-selector']:
-        @callback(
-            Output({'type': 'legend-item', 'selector': selector_id, 'value': dash.dependencies.ALL}, 'style'),
-            Input(selector_id, 'value'),
-            State({'type': 'legend-item', 'selector': selector_id, 'value': dash.dependencies.ALL}, 'id'),
-            selector_id=selector_id,
-        )
-        def update_legend_opacity(selected_values, item_ids, selector_id=selector_id):
-            selected_values = selected_values or []
-            base_style = {
-                'display': 'inline-flex', 'alignItems': 'center',
-                'marginRight': '16px', 'cursor': 'pointer',
-                'fontSize': '13px', 'userSelect': 'none',
-                'transition': 'opacity 0.15s',
-            }
-            return [
-                {**base_style, 'opacity': '1' if item_id['value'] in selected_values else '0.35'}
-                for item_id in item_ids
-            ]
 

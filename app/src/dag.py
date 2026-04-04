@@ -221,7 +221,7 @@ def create_session_dag_from_json(df):
     Generate the DAG HTML string from the provided multidimensional session dataframe.
     """
     if df.empty:
-        return ""
+        return "", {}
     
     # Debug: Print available columns in input dataframe
     print("\n" + "="*60)
@@ -277,6 +277,9 @@ def create_session_dag_from_json(df):
     # Apply standard z-score styling using the last row (representing the rolling window up to the last known session)
     new_node_values = dag.get_new_node_values(df_z=df_z.tail(1))
     dag.update_node_values(new_node_values)
-    
+
+    # Extract z-scores for the last session as a plain dict
+    last_z = df_z.tail(1).iloc[0].to_dict()
+
     # Note: Returning HTML directly to embed inside iframe srcDoc
-    return dag.net.generate_html()
+    return dag.net.generate_html(), last_z

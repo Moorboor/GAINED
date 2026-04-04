@@ -478,9 +478,17 @@ def extract_metadata_from_session(file_buffer, filename):
             'rationale': ['CTS_Discovery_rationale', 'discovery_rationale']
         },
         'cts_methods': {
-            'metric': ['CTS_Methods', 'methods'], 
+            'metric': ['CTS_Methods', 'methods'],
             'rationale': ['CTS_Methods_rationale', 'methods_rationale']
-        }
+        },
+        'alliance': {
+            'metric': ['ALLIANCE', 'alliance'],
+            'rationale': ['ALLIANCE_rationale', 'alliance_rationale']
+        },
+        'epo_1': {
+            'metric': ['EPO_1', 'EPO1', 'epo_1', 'epo1'],
+            'rationale': ['EPO_1_rationale', 'EPO1_rationale', 'epo_1_rationale']
+        },
     }
     
     result = {'filename': filename, 'session_idx': 0}

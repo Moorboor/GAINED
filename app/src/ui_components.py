@@ -1,7 +1,17 @@
 """
 UI components and layout for GAINED application
 """
+import json
+import os
 from dash import html, dcc
+
+# Load strings
+_STRINGS_PATH = os.path.join(os.path.dirname(__file__), 'strings.json')
+with open(_STRINGS_PATH, 'r', encoding='utf-8') as _f:
+    STRINGS = json.load(_f)
+
+def t(lang, key):
+    return STRINGS.get(lang, STRINGS['de']).get(key, key)
 
 
 # Design System Constants
@@ -263,25 +273,25 @@ def create_sessions_upload_section():
     }
     
     return html.Div([
-        html.H2("Upload Multiple Sessions"),
-        html.P(
-            "Upload multiple session files (xlsx/csv) to analyze trends",
+        html.H2(id='upload-title', children="Mehrere Sitzungen hochladen"),
+        html.P(id='upload-subtitle',
+            children="Mehrere Sitzungsdateien (xlsx/csv) hochladen, um Verläufe zu analysieren",
             style={'color': COLORS['gray_500'], 'fontSize': '14px', 'marginBottom': '16px'}
         ),
         dcc.Upload(
             id='upload-sessions',
             children=html.Div([
-                html.Div('Drop multiple session files here', style={
+                html.Div(id='upload-drop', children='Sitzungsdateien hier ablegen', style={
                     'fontSize': '15px',
                     'fontWeight': '500',
                     'color': COLORS['gray_700'],
                     'marginBottom': '4px'
                 }),
-                html.Div('Accepts .xlsx and .csv files', style={
+                html.Div(id='upload-formats', children='Akzeptiert .xlsx und .csv Dateien', style={
                     'fontSize': '13px',
                     'color': COLORS['gray_500']
                 }),
-                html.Div('or click to browse', style={
+                html.Div(id='upload-browse', children='oder hier klicken', style={
                     'fontSize': '12px',
                     'color': COLORS['gray_400'],
                     'marginTop': '8px'
@@ -298,11 +308,12 @@ def create_sessions_upload_section():
 def create_sessions_detailed_charts_section():
     """Create the specific detailed charts section with rationale boxes"""
     
-    def create_chart_with_rationale(title, chart_id, rationale_id, extra_controls=None):
+    def create_chart_with_rationale(title, chart_id, rationale_id, title_id=None, extra_controls=None):
         badge_id = f'{rationale_id}-badge'
+        title_props = {'id': title_id} if title_id else {}
         return html.Div([
             html.Div([
-                html.H3(title, style={'fontSize': '16px', 'marginBottom': '12px', 'display': 'inline-block'}),
+                html.H3(title, style={'fontSize': '16px', 'marginBottom': '12px', 'display': 'inline-block'}, **title_props),
                 extra_controls if extra_controls else html.Span()
             ], style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'space-between', 'flexWrap': 'wrap', 'gap': '12px'}),
             html.Div([
@@ -322,7 +333,7 @@ def create_sessions_detailed_charts_section():
                 html.Div([
                     # Sticky header with rationale title + session badge
                     html.Div([
-                        html.H4("Rationale", style={
+                        html.H4(id=f'{rationale_id}-title', children="Begründung", style={
                             'fontSize': '14px', 'color': COLORS['gray_600'], 'margin': '0'
                         }),
                         html.Span(id=badge_id, children="No session", style={
@@ -462,6 +473,10 @@ def create_sessions_detailed_charts_section():
          'tooltip': 'Verhaltensaktivierung: Wie aktiv war der Patient in der letzten Woche? Skala 0–100 – je höher, desto aktiver laut KI-Assessment.'},
         {'value': 'engagement', 'label': 'Engagement', 'color': '#059669',
          'tooltip': 'Engagement: Wie aktiv bringt sich der Patient in die Therapie ein (Hausaufgaben, Übungen)? Skala 0–100 – je höher, desto stärker das Engagement laut KI-Assessment.'},
+        {'value': 'alliance', 'label': 'Allianz', 'color': '#f59e0b',
+         'tooltip': 'Allianz (ALLIANCE): Die therapeutische Allianz aus Sicht des Patienten – Vertrauen, gemeinsame Ziele und gegenseitige Unterstützung. Skala 0–5.'},
+        {'value': 'epo_1', 'label': 'Wohlbefinden', 'color': '#0ea5e9',
+         'tooltip': 'Wohlbefinden (EPO-1): Subjektiv wahrgenommenes emotionales und psychisches Funktionsniveau. Skala 0–100 – je höher, desto besser das Wohlbefinden.'},
     ])
 
     # CTS legend
@@ -480,20 +495,21 @@ def create_sessions_detailed_charts_section():
 
     return html.Div([
         # 1. Challenging vs Supporting
-        create_chart_with_rationale("Therapist Contribution (TCCS)", 'tccs-chart', 'tccs-rationale', extra_controls=tccs_line_selector),
+        create_chart_with_rationale("Therapeutenbeitrag (TCCS)", 'tccs-chart', 'tccs-rationale', title_id='chart-title-tccs', extra_controls=tccs_line_selector),
 
         # 2. Activation vs Engagement
-        create_chart_with_rationale("Patient State (Activation & Engagement)", 'activation-engagement-chart', 'activation-rationale', extra_controls=ae_line_selector),
+        create_chart_with_rationale("Patientenstatus (Aktivierung & Engagement)", 'activation-engagement-chart', 'activation-rationale', title_id='chart-title-ae', extra_controls=ae_line_selector),
 
         # 3. CTS Breakdown with line selector
-        create_chart_with_rationale("Competence Scale (CTS)", 'cts-chart', 'cts-rationale', extra_controls=cts_line_selector),
-        
+        create_chart_with_rationale("Kompetenzskala (CTS)", 'cts-chart', 'cts-rationale', title_id='chart-title-cts', extra_controls=cts_line_selector),
+
         # 4. DAG Pipeline
         html.Div([
-            html.H3("Psychometric Relationship Graph (DAG)"),
+            html.H3(id='chart-title-dag', children="Psychometrischer Beziehungsgraph (DAG)"),
+            html.Div(id='dag-zscores', style={'marginTop': '16px'}),
             html.Iframe(
-                id='dag-iframe', 
-                style={'width': '100%', 'height': '800px', 'border': 'none', 'marginTop': '20px'}
+                id='dag-iframe',
+                style={'width': '100%', 'height': '800px', 'border': 'none', 'marginTop': '12px'}
             )
         ], style=CARD_STYLE)
         
@@ -505,19 +521,19 @@ def create_sessions_layout():
     return html.Div([
         # Header
         html.Div([
-            html.H1("GAINED - Sessions Analysis", style={
+            html.H1(id='sessions-title', children="GAINED – Sitzungsanalyse", style={
                 'textAlign': 'center',
                 'marginBottom': '4px',
                 'color': COLORS['gray_900']
             }),
-            html.P("Analyze trends across multiple therapy sessions", style={
+            html.P(id='sessions-subtitle', children="Verläufe über mehrere Therapiesitzungen analysieren", style={
                 'textAlign': 'center',
                 'color': COLORS['gray_500'],
                 'fontSize': '14px',
                 'marginBottom': '24px'
             }),
             html.Div([
-                dcc.Link("← Back to Single Session Analysis", href="/", style={
+                dcc.Link(id='sessions-back-link', children="← Zurück zur Einzelsitzungsanalyse", href="/", style={
                     'color': COLORS['primary'],
                     'fontSize': '14px',
                     'textDecoration': 'none',
@@ -552,6 +568,33 @@ def create_layout():
     """Create the main application layout wrapper with routing"""
     return html.Div([
         dcc.Location(id='url', refresh=False),
+        dcc.Store(id='lang', data='de', storage_type='local'),
+
+        # Global language bar
+        html.Div([
+            dcc.Dropdown(
+                id='lang-dropdown',
+                options=[
+                    {'label': '🇩🇪  Deutsch', 'value': 'de'},
+                    {'label': '🇬🇧  English', 'value': 'en'},
+                ],
+                value='de',
+                clearable=False,
+                searchable=False,
+                style={'width': '140px', 'fontSize': '13px'},
+            ),
+        ], style={
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'flex-end',
+            'padding': '8px 24px',
+            'backgroundColor': COLORS['white'],
+            'borderBottom': f'1px solid {COLORS["gray_200"]}',
+            'position': 'sticky',
+            'top': '0',
+            'zIndex': '1000',
+        }),
+
         html.Div(id='page-content')
     ])
 
@@ -566,7 +609,7 @@ def create_main_analysis_layout():
                 'marginBottom': '4px',
                 'color': COLORS['gray_900']
             }),
-            html.P("Therapy Session Analysis", style={
+            html.P(id='main-subtitle', children="Therapiesitzungsanalyse", style={
                 'textAlign': 'center',
                 'color': COLORS['gray_500'],
                 'fontSize': '14px',
@@ -576,7 +619,7 @@ def create_main_analysis_layout():
         
         # Navigation to Sessions
         html.Div([
-            dcc.Link("Go to Multi-Session Analysis →", href="/sessions", style={
+            dcc.Link(id='main-nav-link', children="Zur Mehrsitzungsanalyse →", href="/sessions", style={
                 'color': COLORS['primary'],
                 'fontSize': '14px',
                 'textDecoration': 'none',
