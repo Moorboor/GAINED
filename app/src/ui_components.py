@@ -392,26 +392,25 @@ def create_sessions_detailed_charts_section():
                         'verticalAlign': 'middle',
                         'flexShrink': '0',
                     }),
-                    html.Span(item['label'], style={
-                        'verticalAlign': 'middle',
-                    }),
-                    html.Span('i', title=item['tooltip'], style={
-                        'display': 'inline-flex',
-                        'alignItems': 'center',
-                        'justifyContent': 'center',
-                        'width': '13px',
-                        'height': '13px',
-                        'borderRadius': '50%',
-                        'backgroundColor': COLORS['gray_300'],
-                        'color': COLORS['white'],
-                        'fontSize': '9px',
-                        'fontStyle': 'italic',
-                        'fontWeight': 'bold',
-                        'marginLeft': '4px',
-                        'cursor': 'help',
-                        'flexShrink': '0',
-                        'lineHeight': '1',
-                    }),
+                    html.Span(item['label'], style={'verticalAlign': 'middle'}),
+                    html.Span([
+                        html.Span('i', style={
+                            'display': 'inline-flex',
+                            'alignItems': 'center',
+                            'justifyContent': 'center',
+                            'width': '13px',
+                            'height': '13px',
+                            'borderRadius': '50%',
+                            'backgroundColor': COLORS['gray_300'],
+                            'color': COLORS['white'],
+                            'fontSize': '9px',
+                            'fontStyle': 'italic',
+                            'fontWeight': 'bold',
+                            'cursor': 'help',
+                            'lineHeight': '1',
+                        }),
+                        html.Span(item['tooltip'], className='legend-popover'),
+                    ], className='legend-info-wrap', style={'marginLeft': '4px', 'flexShrink': '0'}),
                 ],
                 id={'type': 'legend-item', 'selector': selector_id, 'value': item['value']},
                 n_clicks=0,
@@ -451,32 +450,32 @@ def create_sessions_detailed_charts_section():
 
     # TCCS legend
     tccs_line_selector = make_legend('tccs-line-selector', [
-        {'value': 'challenging', 'label': 'Supportive',  'color': '#2563eb',
-         'tooltip': 'TCCS_SP — proportion of supportive therapist interventions per session'},
-        {'value': 'supporting',  'label': 'Challenging', 'color': '#dc2626',
-         'tooltip': 'TCCS_C — proportion of challenging therapist interventions per session'},
+        {'value': 'challenging', 'label': 'Supportiv', 'color': '#2563eb',
+         'tooltip': 'Supportiv-stützendes Therapeutenverhalten: Der Therapeut hört aufmerksam zu, zeigt Verständnis und fasst wichtige Punkte zusammen. Skala 0–100 – je höher, desto häufiger dieses Verhalten.'},
+        {'value': 'supporting',  'label': 'Herausfordernd', 'color': '#dc2626',
+         'tooltip': 'Herausforderndes Therapeutenverhalten: Der Therapeut regt den Patienten an, neue Perspektiven einzunehmen und über bekannte Denk- und Verhaltensmuster hinauszugehen. Skala 0–100.'},
     ])
 
     # Activation & Engagement legend
     ae_line_selector = make_legend('ae-line-selector', [
-        {'value': 'activation', 'label': 'Activation', 'color': '#9333ea',
-         'tooltip': 'Patient emotional activation level (0–100) averaged over session segments'},
+        {'value': 'activation', 'label': 'Aktivierung', 'color': '#9333ea',
+         'tooltip': 'Verhaltensaktivierung: Wie aktiv war der Patient in der letzten Woche? Skala 0–100 – je höher, desto aktiver laut KI-Assessment.'},
         {'value': 'engagement', 'label': 'Engagement', 'color': '#059669',
-         'tooltip': 'Patient engagement level (0–100) averaged over session segments'},
+         'tooltip': 'Engagement: Wie aktiv bringt sich der Patient in die Therapie ein (Hausaufgaben, Übungen)? Skala 0–100 – je höher, desto stärker das Engagement laut KI-Assessment.'},
     ])
 
     # CTS legend
     cts_line_selector = make_legend('cts-line-selector', [
-        {'value': 'cts_cognitions', 'label': 'Cognitions', 'color': '#ea580c',
-         'tooltip': 'CTS-R Cognitions subscale (0–6): therapist ability to identify and work with dysfunctional thoughts'},
-        {'value': 'cts_behaviours', 'label': 'Behaviours', 'color': '#0891b2',
-         'tooltip': 'CTS-R Behaviours subscale (0–6): use of behavioural techniques and homework'},
-        {'value': 'cts_discovery', 'label': 'Discovery', 'color': '#db2777',
-         'tooltip': 'CTS-R Discovery subscale (0–6): guided discovery and Socratic questioning'},
-        {'value': 'cts_methods',   'label': 'Methods',   'color': '#4f46e5',
-         'tooltip': 'CTS-R Methods subscale (0–6): structure, pacing and use of CBT methods'},
-        {'value': 'cts_mean',      'label': 'Mean',      'color': '#111827',
-         'tooltip': 'Session mean across all four CTS-R subscales'},
+        {'value': 'cts_cognitions', 'label': 'Kognitionen', 'color': '#ea580c',
+         'tooltip': 'Kognitionen (CTS_Cognitions): Der Therapeut hilft dem Patienten, belastende Gedanken und Grundüberzeugungen zu erkennen. Skala 0–6 – je höher, desto besser gelingt Einsicht oder Veränderung.'},
+        {'value': 'cts_behaviours', 'label': 'Verhaltensanalyse', 'color': '#0891b2',
+         'tooltip': 'Verhaltensanalyse (CTS_Behaviours): Verhaltensmuster erkennen und neue Verhaltensweisen entwickeln. Skala 0–6 – je höher, desto wirksamer die Verhaltensarbeit.'},
+        {'value': 'cts_discovery', 'label': 'Geleitetes Entdecken', 'color': '#db2777',
+         'tooltip': 'Geleitetes Entdecken (CTS_Discovery): Der Therapeut arbeitet mit offenen Fragen, um Reflexion und neue Einsichten zu fördern. Skala 0–6.'},
+        {'value': 'cts_methods',   'label': 'Änderungsinterventionen', 'color': '#4f46e5',
+         'tooltip': 'Änderungsinterventionen (CTS_Methods): Vielfalt und Geschick beim Einsatz von Methoden zur Veränderung von Gedanken oder Verhalten. Skala 0–6.'},
+        {'value': 'cts_mean',      'label': 'PT-Kompetenz', 'color': '#111827',
+         'tooltip': 'PT-Kompetenz (CTS_MEAN): Gesamtbewertung der therapeutischen Fertigkeiten – Gedanken- und Verhaltensanalyse, geleitetes Entdecken und Änderungsinterventionen. Inklusive Flexibilität und Umgang mit Problemen.'},
     ])
 
     return html.Div([
