@@ -847,6 +847,22 @@ def register_callbacks(app):
 
         return df, x_data, x_label, x_axis_cfg, create_trace
 
+    def _add_error_band(fig, x_data, y_vals, color, y_min, y_max):
+        """Add ±1 SD shaded band to fig. y_vals is a pandas Series."""
+        std = float(y_vals.std(ddof=1))
+        y_upper = (y_vals + std).clip(upper=y_max).tolist()
+        y_lower = (y_vals - std).clip(lower=y_min).tolist()
+        fig.add_trace(go.Scatter(
+            x=x_data + x_data[::-1],
+            y=y_upper + y_lower[::-1],
+            fill='toself',
+            fillcolor=color,
+            opacity=0.12,
+            line=dict(width=0),
+            hoverinfo='skip',
+            showlegend=False,
+        ))
+
     # Update TCCS chart with line selection
     @callback(
         Output('tccs-chart', 'figure'),
@@ -876,14 +892,14 @@ def register_callbacks(app):
                 yaxis_title='Score', yaxis=dict(range=[0, 1]),
                 hovermode='closest', template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
-                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
+                showlegend=False,
             )
             return fig
         except Exception:
             logger.exception("Error updating TCCS chart")
             return go.Figure()
 
-    # Update Activation/Engagement chart with line selection
+    # Update Activation/Engagement chart with line selection and error bands
     @callback(
         Output('activation-engagement-chart', 'figure'),
         [Input('sessions-data', 'data'),
@@ -902,17 +918,44 @@ def register_callbacks(app):
                 ('activation', 'Activation', '#9333ea'),
                 ('engagement', 'Engagement', '#059669'),
             ]
+            show_bands = len(df) >= 2
+
             for metric, label, color in ae_metrics:
-                if metric in selected_lines:
-                    t = create_trace(metric, label, color)
-                    if t:
-                        fig.add_trace(t)
+                if metric not in selected_lines or metric not in df.columns:
+                    continue
+
+                y_vals = pd.to_numeric(df[metric], errors='coerce')
+
+                # Error band (1 std across all sessions)
+                if show_bands:
+                    std = float(y_vals.std(ddof=1))
+                    y_upper = (y_vals + std).clip(upper=100).tolist()
+                    y_lower = (y_vals - std).clip(lower=0).tolist()
+                    x_band = x_data + x_data[::-1]
+                    y_band = y_upper + y_lower[::-1]
+                    fig.add_trace(go.Scatter(
+                        x=x_band,
+                        y=y_band,
+                        fill='toself',
+                        fillcolor=color,
+                        opacity=0.12,
+                        line=dict(width=0),
+                        hoverinfo='skip',
+                        showlegend=False,
+                        name=f'{label} ±1 SD'
+                    ))
+
+                # Main line trace
+                t = create_trace(metric, label, color)
+                if t:
+                    fig.add_trace(t)
+
             fig.update_layout(
                 xaxis_title=x_label, xaxis=x_axis_cfg,
                 yaxis_title='Score', yaxis=dict(range=[0, 100]),
                 hovermode='closest', template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
-                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
+                showlegend=False,
             )
             return fig
         except Exception:
@@ -935,10 +978,13 @@ def register_callbacks(app):
         
         try:
             df = pd.read_json(io.StringIO(sessions_json), orient='split')
-            
+
             if df.empty:
                 return go.Figure()
-            
+
+            print("CTS DEBUG columns:", list(df.columns))
+            print("CTS DEBUG selected_lines:", selected_lines)
+
             # Sort by session number
             if 'session_number' in df.columns:
                 df = df.sort_values('session_number').reset_index(drop=True)
@@ -950,15 +996,12 @@ def register_callbacks(app):
                 x_data = list(range(1, len(df) + 1))
             x_label = 'Session'
 
-            # Calculate overall mean of all CTS metrics across all sessions (single value)
+            # Compute per-session mean of available CTS subscales
             cts_cols = ['cts_cognitions', 'cts_behaviours', 'cts_discovery', 'cts_methods']
             existing_cts_cols = [c for c in cts_cols if c in df.columns]
-            overall_mean = None
+            session_means = None
             if existing_cts_cols:
-                all_values = df[existing_cts_cols].values.flatten()
-                all_values = all_values[~pd.isna(all_values)]
-                if len(all_values) > 0:
-                    overall_mean = float(all_values.mean())
+                session_means = df[existing_cts_cols].apply(pd.to_numeric, errors='coerce').mean(axis=1)
 
             # Helper to create trace
             def create_trace(metric_name, label, color, dash_style=None):
@@ -1005,30 +1048,45 @@ def register_callbacks(app):
 
             # CTS Chart with selectable lines
             fig_cts = go.Figure()
-            
+
             cts_metrics = [
                 ('cts_cognitions', 'Cognitions', '#ea580c'),     # Orange
                 ('cts_behaviours', 'Behaviours', '#0891b2'),     # Cyan
                 ('cts_discovery', 'Discovery', '#db2777'),       # Pink
                 ('cts_methods', 'Methods', '#4f46e5'),           # Indigo
             ]
-            
+
             for metric, label, color in cts_metrics:
-                if metric in selected_lines:
-                    t = create_trace(metric, label, color)
-                    if t:
-                        fig_cts.add_trace(t)
-            
-            # Add horizontal mean line if selected and data exists
-            if 'cts_mean' in selected_lines and overall_mean is not None:
-                x_range = [min(x_data), max(x_data)]
+                if metric not in selected_lines or metric not in df.columns:
+                    continue
+                t = create_trace(metric, label, color)
+                if t:
+                    fig_cts.add_trace(t)
+
+            # Add per-session mean line if selected
+            if 'cts_mean' in selected_lines and session_means is not None:
+                hover_texts = []
+                for i, (_, row) in enumerate(df.iterrows()):
+                    val = session_means.iloc[i]
+                    session_num = row.get('session_number', '')
+                    duration = row.get('session_duration_min', '')
+                    if pd.isna(val):
+                        hover_texts.append('')
+                    else:
+                        hover_text = f"<b>Session {int(session_num)}</b>"
+                        if pd.notna(duration):
+                            hover_text += f" ({duration} min)"
+                        hover_text += f"<br>Mean: {val:.2f}"
+                        hover_texts.append(hover_text)
                 fig_cts.add_trace(go.Scatter(
-                    x=x_range,
-                    y=[overall_mean, overall_mean],
-                    mode='lines',
-                    name=f'Mean ({overall_mean:.2f})',
+                    x=x_data,
+                    y=session_means,
+                    mode='lines+markers',
+                    name='Mean',
                     line=dict(width=2, color='#111827', dash='dash'),
-                    hovertemplate=f'<b>Overall Mean</b>: {overall_mean:.2f}<extra></extra>'
+                    marker=dict(size=8),
+                    hovertemplate='%{text}<extra></extra>',
+                    text=hover_texts
                 ))
             
             fig_cts.update_layout(
@@ -1039,13 +1097,14 @@ def register_callbacks(app):
                 hovermode='closest',
                 template='plotly_white',
                 margin=dict(l=40, r=40, t=30, b=40),
-                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
+                showlegend=False,
             )
             
             return fig_cts
             
         except Exception as e:
-            logger.exception("Error updating CTS chart")
+            logger.exception("Error updating CTS chart: %s", e)
+            import traceback; traceback.print_exc()
             return go.Figure()
 
 
@@ -1674,4 +1733,44 @@ def register_clientside_callbacks(app):
         Input({'type': 'transcript-segment', 'index': dash.dependencies.ALL}, 'n_clicks'),
         State('transcript-data', 'data')
     )
+
+    for selector_id in ['tccs-line-selector', 'ae-line-selector', 'cts-line-selector']:
+        @callback(
+            Output(selector_id, 'value'),
+            Input({'type': 'legend-item', 'selector': selector_id, 'value': dash.dependencies.ALL}, 'n_clicks'),
+            State(selector_id, 'value'),
+            prevent_initial_call=True,
+        )
+        def toggle_legend_item(n_clicks_list, current_values, selector_id=selector_id):
+            from dash import ctx
+            if not ctx.triggered_id:
+                raise PreventUpdate
+            clicked_value = ctx.triggered_id['value']
+            values = list(current_values) if current_values else []
+            if clicked_value in values:
+                values.remove(clicked_value)
+            else:
+                values.append(clicked_value)
+            return values
+
+    # Sync legend item opacity with checklist state
+    for selector_id in ['tccs-line-selector', 'ae-line-selector', 'cts-line-selector']:
+        @callback(
+            Output({'type': 'legend-item', 'selector': selector_id, 'value': dash.dependencies.ALL}, 'style'),
+            Input(selector_id, 'value'),
+            State({'type': 'legend-item', 'selector': selector_id, 'value': dash.dependencies.ALL}, 'id'),
+            selector_id=selector_id,
+        )
+        def update_legend_opacity(selected_values, item_ids, selector_id=selector_id):
+            selected_values = selected_values or []
+            base_style = {
+                'display': 'inline-flex', 'alignItems': 'center',
+                'marginRight': '16px', 'cursor': 'pointer',
+                'fontSize': '13px', 'userSelect': 'none',
+                'transition': 'opacity 0.15s',
+            }
+            return [
+                {**base_style, 'opacity': '1' if item_id['value'] in selected_values else '0.35'}
+                for item_id in item_ids
+            ]
 

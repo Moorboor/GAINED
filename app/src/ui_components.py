@@ -370,56 +370,114 @@ def create_sessions_detailed_charts_section():
             ], style={'display': 'flex', 'flexDirection': 'row', 'flexWrap': 'wrap', 'gap': '24px', 'padding': '0 12px'})
         ], style={**CARD_STYLE, 'marginBottom': '24px', 'marginTop': '12px'})
 
-    def make_selector(selector_id, options, default_values):
+    def make_legend(selector_id, items):
+        """
+        items: list of dicts with keys: value, label, color, tooltip
+        Renders a custom HTML legend with tooltips. Keeps a hidden dcc.Checklist for callback state.
+        """
+        default_values = [item['value'] for item in items]
+
+        legend_items = []
+        for item in items:
+            legend_items.append(
+                html.Div([
+                    # Colored line + dot swatch
+                    html.Span(style={
+                        'display': 'inline-block',
+                        'width': '24px',
+                        'height': '4px',
+                        'backgroundColor': item['color'],
+                        'borderRadius': '2px',
+                        'marginRight': '5px',
+                        'verticalAlign': 'middle',
+                        'flexShrink': '0',
+                    }),
+                    html.Span(item['label'], style={
+                        'verticalAlign': 'middle',
+                    }),
+                    html.Span('i', title=item['tooltip'], style={
+                        'display': 'inline-flex',
+                        'alignItems': 'center',
+                        'justifyContent': 'center',
+                        'width': '13px',
+                        'height': '13px',
+                        'borderRadius': '50%',
+                        'backgroundColor': COLORS['gray_300'],
+                        'color': COLORS['white'],
+                        'fontSize': '9px',
+                        'fontStyle': 'italic',
+                        'fontWeight': 'bold',
+                        'marginLeft': '4px',
+                        'cursor': 'help',
+                        'flexShrink': '0',
+                        'lineHeight': '1',
+                    }),
+                ],
+                id={'type': 'legend-item', 'selector': selector_id, 'value': item['value']},
+                n_clicks=0,
+                **{'data-value': item['value'], 'data-selector': selector_id},
+                style={
+                    'display': 'inline-flex',
+                    'alignItems': 'center',
+                    'marginRight': '16px',
+                    'cursor': 'pointer',
+                    'fontSize': '13px',
+                    'userSelect': 'none',
+                    'opacity': '1',
+                    'transition': 'opacity 0.15s',
+                })
+            )
+
         return html.Div([
+            # Hidden checklist keeps callback state
             dcc.Checklist(
                 id=selector_id,
-                options=options,
+                options=[{'label': '', 'value': item['value']} for item in items],
                 value=default_values,
-                inline=True,
-                style={'fontSize': '13px'},
-                inputStyle={'marginRight': '4px'},
-                labelStyle={'marginRight': '16px', 'display': 'inline-flex', 'alignItems': 'center'}
-            )
-        ], style={
-            'padding': '8px 12px',
-            'backgroundColor': COLORS['gray_50'],
-            'borderRadius': '6px',
-            'border': f'1px solid {COLORS["gray_200"]}',
-        })
+                style={'display': 'none'},
+            ),
+            # Visible HTML legend
+            html.Div(legend_items, id=f'{selector_id}-legend', style={
+                'display': 'flex',
+                'flexWrap': 'wrap',
+                'alignItems': 'center',
+                'gap': '4px',
+                'padding': '8px 12px',
+                'backgroundColor': COLORS['gray_50'],
+                'borderRadius': '6px',
+                'border': f'1px solid {COLORS["gray_200"]}',
+            })
+        ])
 
-    # TCCS line selection checklist
-    tccs_line_selector = make_selector(
-        'tccs-line-selector',
-        [
-            {'label': ' Supportive', 'value': 'challenging'},
-            {'label': ' Challenging', 'value': 'supporting'},
-        ],
-        ['challenging', 'supporting']
-    )
+    # TCCS legend
+    tccs_line_selector = make_legend('tccs-line-selector', [
+        {'value': 'challenging', 'label': 'Supportive',  'color': '#2563eb',
+         'tooltip': 'TCCS_SP — proportion of supportive therapist interventions per session'},
+        {'value': 'supporting',  'label': 'Challenging', 'color': '#dc2626',
+         'tooltip': 'TCCS_C — proportion of challenging therapist interventions per session'},
+    ])
 
-    # Activation & Engagement line selection checklist
-    ae_line_selector = make_selector(
-        'ae-line-selector',
-        [
-            {'label': ' Activation', 'value': 'activation'},
-            {'label': ' Engagement', 'value': 'engagement'},
-        ],
-        ['activation', 'engagement']
-    )
+    # Activation & Engagement legend
+    ae_line_selector = make_legend('ae-line-selector', [
+        {'value': 'activation', 'label': 'Activation', 'color': '#9333ea',
+         'tooltip': 'Patient emotional activation level (0–100) averaged over session segments'},
+        {'value': 'engagement', 'label': 'Engagement', 'color': '#059669',
+         'tooltip': 'Patient engagement level (0–100) averaged over session segments'},
+    ])
 
-    # CTS line selection checklist
-    cts_line_selector = make_selector(
-        'cts-line-selector',
-        [
-            {'label': ' Cognitions', 'value': 'cts_cognitions'},
-            {'label': ' Behaviours', 'value': 'cts_behaviours'},
-            {'label': ' Discovery', 'value': 'cts_discovery'},
-            {'label': ' Methods', 'value': 'cts_methods'},
-            {'label': ' Mean', 'value': 'cts_mean'},
-        ],
-        ['cts_cognitions', 'cts_behaviours', 'cts_discovery', 'cts_methods', 'cts_mean']
-    )
+    # CTS legend
+    cts_line_selector = make_legend('cts-line-selector', [
+        {'value': 'cts_cognitions', 'label': 'Cognitions', 'color': '#ea580c',
+         'tooltip': 'CTS-R Cognitions subscale (0–6): therapist ability to identify and work with dysfunctional thoughts'},
+        {'value': 'cts_behaviours', 'label': 'Behaviours', 'color': '#0891b2',
+         'tooltip': 'CTS-R Behaviours subscale (0–6): use of behavioural techniques and homework'},
+        {'value': 'cts_discovery', 'label': 'Discovery', 'color': '#db2777',
+         'tooltip': 'CTS-R Discovery subscale (0–6): guided discovery and Socratic questioning'},
+        {'value': 'cts_methods',   'label': 'Methods',   'color': '#4f46e5',
+         'tooltip': 'CTS-R Methods subscale (0–6): structure, pacing and use of CBT methods'},
+        {'value': 'cts_mean',      'label': 'Mean',      'color': '#111827',
+         'tooltip': 'Session mean across all four CTS-R subscales'},
+    ])
 
     return html.Div([
         # 1. Challenging vs Supporting

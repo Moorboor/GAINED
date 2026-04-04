@@ -3,7 +3,11 @@
     "allow": [
       "Bash(python -c \"from src.ui_components import create_layout; from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('imports ok'\\)\")",
       "Bash(../../venv/bin/python -c \"from src.ui_components import create_layout; from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('imports ok'\\)\")",
-      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('imports ok'\\)\")"
+      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('imports ok'\\)\")",
+      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('ok'\\)\")",
+      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c ':*)",
+      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.callbacks import register_callbacks, register_clientside_callbacks; print\\('ok'\\)\")",
+      "Bash(/Users/ali/Desktop/GAINED/venv/bin/python -c \"from src.ui_components import create_layout; print\\('ok'\\)\")"
     ]
   }
 }
