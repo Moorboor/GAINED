@@ -1,27 +1,22 @@
 {
   "de": {
     "lang_label": "Sprache",
-
     "sessions_title": "GAINED – Sitzungsanalyse",
     "sessions_subtitle": "Verläufe über mehrere Therapiesitzungen analysieren",
     "sessions_back_link": "← Zurück zur Einzelsitzungsanalyse",
     "sessions_nav_link": "Zur Mehrsitzungsanalyse →",
-
     "upload_title": "Mehrere Sitzungen hochladen",
     "upload_subtitle": "Mehrere Sitzungsdateien (xlsx/csv) hochladen, um Verläufe zu analysieren",
     "upload_drop": "Sitzungsdateien hier ablegen",
     "upload_formats": "Akzeptiert .xlsx und .csv Dateien",
     "upload_browse": "oder hier klicken",
-
     "rationale_title": "Begründung",
     "rationale_placeholder": "Auf einen Punkt klicken, um die Begründung zu sehen.",
     "rationale_no_session": "Keine Sitzung",
-
     "chart_tccs": "Therapeutenbeitrag (TCCS)",
     "chart_ae": "Patientenstatus (Aktivierung & Engagement)",
     "chart_cts": "Kompetenzskala (CTS)",
     "chart_dag": "Psychometrischer Beziehungsgraph (DAG)",
-
     "legend_supportive": "Supportiv",
     "legend_challenging": "Herausfordernd",
     "legend_activation": "Aktivierung",
@@ -30,10 +25,9 @@
     "legend_behaviours": "Verhaltensanalyse",
     "legend_discovery": "Geleitetes Entdecken",
     "legend_methods": "Änderungsinterventionen",
-    "legend_mean": "PT-Kompetenz",
+    "legend_mean": "VT-Kompetenz",
     "legend_alliance": "Allianz",
     "legend_epo": "Wohlbefinden",
-
     "tooltip_supportive": "Supportiv-stützendes Therapeutenverhalten bedeutet, dass der Therapeut aufmerksam zuhört, Verständnis zeigt und Interesse an den Gedanken und Gefühlen des Patienten hat. Er hilft dabei, das Gesagte zu ordnen, nachzufragen und wichtige Punkte zusammenzufassen. Je höher der Wert auf einer Skala von 0 bis 100, desto häufiger hat der Therapeut solches Verhalten gezeigt.",
     "tooltip_challenging": "Herausforderndes Therapeutenverhalten bedeutet, dass der Therapeut den Patienten dazu anregt, neue Perspektiven einzunehmen und über bekannte Denk- und Verhaltensmuster hinauszugehen. Je höher der Wert auf einer Skala von 0 bis 100, desto häufiger hat der Therapeut ein solches herausforderndes Verhalten gezeigt.",
     "tooltip_activation": "Verhaltensaktivierung bedeutet, wieder aktiv zu werden und Dinge zu tun, die einem guttun oder wichtig sind. Sie zeigt, inwieweit man in der letzten Woche aktiv war und sich mit dem eigenen Leben auseinandergesetzt hat. Das wird auf einer Skala von 0 bis 100 erfasst – je höher der Wert, desto aktiver war man laut KI-Assessment in der Vorwoche.",
@@ -42,37 +36,31 @@
     "tooltip_behaviours": "Hier geht es darum, Verhaltensmuster und Handlungen zu erkennen, die mit schwierigen Gefühlen oder Situationen zusammenhängen. Auf einer Skala von 0 bis 6 steht ein höherer Wert dafür, dass der Therapeut wirksam hilft, bisherige Verhaltensweisen zu verstehen und/oder neue, alternative Verhaltensweisen zu entwickeln und zu planen.",
     "tooltip_discovery": "Der Therapeut arbeitet mit gezielten, offenen Fragen, die den Patienten dazu anregen, zu reflektieren und neue Einsichten über sich selbst zu gewinnen. Die Skala von 0 bis 6 zeigt an, wie gut es dem Therapeuten gelingt, durch diesen fragenden Stil Erkenntnisse beim Patienten zu fördern.",
     "tooltip_methods": "Änderungsinterventionen bewertet, wie vielfältig, passend und geschickt der Therapeut unterschiedliche Methoden zur Veränderung von Gedanken oder Verhalten anwendet. Ein höherer Wert auf der Skala von 0 bis 6 bedeutet, dass der Therapeut die Techniken sicher, vielfältig und wirkungsvoll eingesetzt hat.",
-    "tooltip_mean": "PT-Kompetenz bewertet die Fertigkeiten des Therapeuten zentrale CBT-Methoden wie Gedanken- und Verhaltensanalyse, geleitetes Entdecken und Veränderungsinterventionen anzuwenden. Dabei wird auch die Flexibilität des Therapeuten und der Umgang mit potenziellen Problemen beachtet.",
+    "tooltip_mean": "VT-Kompetenz erfasst den Gesamtscore in Bezug auf die Anwendung von Gedanken- und Verhaltensanalyse, geleitetem Entdecken und Veränderungsinterventionen. Dabei wird auch die Flexibilität des Therapeuten und der Umgang mit potenziellen Problemen beachtet.",
     "tooltip_alliance": "Die therapeutische Allianz beschreibt die vertrauensvolle Zusammenarbeit zwischen Patient und Therapeut aus Sicht des Patienten. Sie bedeutet, dass beide offen miteinander sprechen, gemeinsame Ziele verfolgen und sich gegenseitig unterstützen, um positive Veränderungen zu erreichen.",
     "tooltip_epo": "Wohlbefinden beschreibt das subjektiv wahrgenommene Ausmaß des aktuellen emotionalen und psychischen Funktionsniveaus bzw. der Beeinträchtigung einer Person. Es wird durch eine Selbstbewertung auf einer Skala (0-100) erfasst, wobei ein hoher Wert für ein hohes Wohlbefinden steht.",
     "tooltip_hscl": "Die Symptomstärke quantifiziert, wie ausgeprägt Symptome wie Nervosität, Traurigkeit, Hoffnungslosigkeit, Interessensverlust in den letzten 7 Tagen waren. Auch inkludiert ist die Häufigkeit von Selbstmordgedanken. Dabei steht ein höherer Wert für eine starke Symptomausprägung.",
-
     "main_title": "GAINED",
     "main_subtitle": "Therapiesitzungsanalyse"
   },
   "en": {
     "lang_label": "Language",
-
     "sessions_title": "GAINED – Sessions Analysis",
     "sessions_subtitle": "Analyze trends across multiple therapy sessions",
     "sessions_back_link": "← Back to Single Session Analysis",
     "sessions_nav_link": "Go to Multi-Session Analysis →",
-
     "upload_title": "Upload Multiple Sessions",
     "upload_subtitle": "Upload multiple session files (xlsx/csv) to analyze trends",
     "upload_drop": "Drop multiple session files here",
     "upload_formats": "Accepts .xlsx and .csv files",
     "upload_browse": "or click to browse",
-
     "rationale_title": "Rationale",
     "rationale_placeholder": "Click on a point to see rationale.",
     "rationale_no_session": "No session",
-
     "chart_tccs": "Therapist Contribution (TCCS)",
     "chart_ae": "Patient State (Activation & Engagement)",
     "chart_cts": "Competence Scale (CTS)",
     "chart_dag": "Psychometric Relationship Graph (DAG)",
-
     "legend_supportive": "Supportive",
     "legend_challenging": "Challenging",
     "legend_activation": "Activation",
@@ -84,7 +72,6 @@
     "legend_mean": "Therapist Skill",
     "legend_alliance": "Alliance",
     "legend_epo": "Well-being",
-
     "tooltip_supportive": "Supportive therapist behaviour (TCCS_SP): The therapist listens attentively, shows understanding, and summarises key points. Scale 0–100 – the higher the value, the more frequently this behaviour was shown.",
     "tooltip_challenging": "Challenging therapist behaviour (TCCS_C): The therapist encourages the patient to adopt new perspectives and move beyond familiar thinking and behavioural patterns. Scale 0–100.",
     "tooltip_activation": "Behavioural Activation (activation_mean): How active was the patient in the past week? Scale 0–100 – the higher, the more active according to the AI assessment.",
@@ -93,10 +80,9 @@
     "tooltip_behaviours": "Behaviour Analysis (CTS_Behaviours): Identifying behavioural patterns and developing new behaviours. Scale 0–6 – the higher, the more effective the behavioural work.",
     "tooltip_discovery": "Guided Discovery (CTS_Discovery): The therapist uses open questions to promote reflection and new insights. Scale 0–6.",
     "tooltip_methods": "Change Interventions (CTS_Methods): Variety and skill in applying methods to change thoughts or behaviour. Scale 0–6.",
-    "tooltip_mean": "Therapist Skill (CTS_MEAN): Overall assessment of therapeutic competencies – cognitive and behavioural analysis, guided discovery, and change interventions. Includes flexibility and handling of problems.",
+    "tooltip_mean": "Therapist Skill (CTS_MEAN): Overall assessment of CBT competencies – cognitive and behavioural analysis, guided discovery, and change interventions. Includes flexibility and handling of problems.",
     "tooltip_alliance": "Alliance (ALLIANCE): The therapeutic alliance from the patient's perspective – trust, shared goals, and mutual support. Scale 0–5.",
     "tooltip_epo": "Well-being (EPO-1): Subjectively perceived emotional and psychological functioning level. Scale 0–100 – the higher, the better the well-being.",
-
     "main_title": "GAINED",
     "main_subtitle": "Therapy Session Analysis"
   }
