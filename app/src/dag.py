@@ -2,13 +2,11 @@ import os
 import pandas as pd
 import numpy as np
 from pyvis.network import Network
+import textwrap
 
 
 def preprocess_df(df):
   '''Takes dataframe and drops columns'''
-  # df["name"] = df["filename"].apply(lambda x: x.lower().split()[0].replace(",", ""))
-  # df["date"] = df["filename"].apply(lambda x: x.lower().split()[3].replace(",", ""))
-  # df["date"] = pd.to_datetime(df["date"], format="%d.%m.%Y")
   df = df[["TCCS_C", "TCCS_SP", "ALLIANCE", "activation_mean", "engagement_mean", 'CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods','HSCL_4_5']].copy()
   
   df_cts = df.filter(regex=r"^CTS", axis=1).map(lambda x: float(x) if type(x)==int else np.nan)
@@ -28,19 +26,23 @@ POPULATION_MEAN = df.apply(lambda x: np.nanmean(x))
 POPULATION_STD = df.apply(lambda x: np.nanstd(x))
 
 
-def get_definition_dict():
-  
-  df = pd.read_excel(os.path.join(DIR_PATH, "GAINED_Definitions_German_English.xlsx"))
-  df = df.set_index("excel column name").T
-  return df
-DEFINITIONS = get_definition_dict()
-
 
 class DAG():
   ''' Creates a directed acyclic graph with 4 levels based on defined psychometrics'''
   
-  def __init__(self):
+  def set_definition_language(self, lang):
+    df = pd.read_excel(os.path.join(DIR_PATH, "GAINED_Definitions_German_English.xlsx"))
+    if lang == "de":
+      df = df.drop(columns=["name english", "definition english"])
+      df = df.rename(columns={"name german": "name", "definition german": "definition"})
+    else:
+      df = df.drop(columns=["name german", "definition german"])
+      df = df.rename(columns={"name english": "name", "definition english": "definition"})
+    self.definitions = df.set_index("excel column name").T
       
+  def __init__(self, lang):
+      
+    self.set_definition_language(lang)
     self.net = Network(
         height="750px",
         width="100%",
@@ -184,8 +186,12 @@ class DAG():
           font_size = max(14, min(50, (22 + 20*value)))
           # Use .iloc for positional indexing to avoid FutureWarning
           try:
-              title_text = f"Z-Score: {value:.2f}, {DEFINITIONS[key].iloc[3]}"
-              label_text = f"{DEFINITIONS[key].iloc[2]}"
+              # title_text = f"Z-Score: {value:.2f}, {self.definitions[key]["definition"]}"
+              label_text = f"{self.definitions[key]["name"]}"
+              definition_text = self.definitions[key]['definition']
+              wrapped_definition = textwrap.fill(str(definition_text), width=50)
+              title_text = f"Z-Score: {value:.2f}\n\n{wrapped_definition}"
+
           except (KeyError, IndexError):
               title_text = f"Z-Score: {value:.2f}"
               label_text = key
@@ -199,7 +205,7 @@ class DAG():
         new_node_values[key] = d
     
     return new_node_values
-
+      
 
 def get_z_values(df, p_mean_series, p_std_series, window=5):
   """
@@ -214,21 +220,14 @@ def get_z_values(df, p_mean_series, p_std_series, window=5):
   # df is now the windowed rolling mean. Compute Z based on Population
   return (res_df - p_mean_series) / p_std_series
 
-    
 
-def create_session_dag_from_json(df):
+def create_session_dag_from_json(df, lang):
     """
     Generate the DAG HTML string from the provided multidimensional session dataframe.
     """
     if df.empty:
         return "", {}
     
-    # Debug: Print available columns in input dataframe
-    print("\n" + "="*60)
-    print("DAG DATA LOADING DEBUG")
-    print("="*60)
-    print(f"Input columns: {list(df.columns)}")
-    print(f"Number of sessions: {len(df)}")
 
     # Standardize column names to match the DAG expected nodes
     rename_map = {
@@ -258,14 +257,6 @@ def create_session_dag_from_json(df):
         
     # Narrow down to just metrics
     metric_df = plot_df[required_cols].copy()
-    
-    # Debug: Print the required fields and their values
-    print(f"\nRequired fields for DAG:")
-    for col in required_cols:
-        values = metric_df[col].tolist()
-        has_data = not all(pd.isna(v) for v in values)
-        print(f"  {col}: {values} {'✓' if has_data else '✗ (all NaN)'}")
-    print("="*60 + "\n")
 
     # Calculate Z scores using rolling window of 5
     df_z = get_z_values(df=metric_df, p_mean_series=pd.Series(POPULATION_MEAN), p_std_series=pd.Series(POPULATION_STD), window=5)
@@ -273,7 +264,8 @@ def create_session_dag_from_json(df):
     # This prevents the UI from showing ugly NaN blocks for incomplete datasets.
     df_z = df_z.fillna(0)
     
-    dag = DAG()
+    dag = DAG(lang=lang)
+    
     # Apply standard z-score styling using the last row (representing the rolling window up to the last known session)
     new_node_values = dag.get_new_node_values(df_z=df_z.tail(1))
     dag.update_node_values(new_node_values)
@@ -282,4 +274,4 @@ def create_session_dag_from_json(df):
     last_z = df_z.tail(1).iloc[0].to_dict()
 
     # Note: Returning HTML directly to embed inside iframe srcDoc
-    return dag.net.generate_html(), last_z
+    return dag.net.generate_html(), last_z, dag.definitions

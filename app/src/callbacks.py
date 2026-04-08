@@ -1149,8 +1149,8 @@ def register_callbacks(app):
             if df.empty:
                 return go.Figure()
 
-            print("CTS DEBUG columns:", list(df.columns))
-            print("CTS DEBUG selected_lines:", selected_lines)
+            # print("CTS DEBUG columns:", list(df.columns))
+            # print("CTS DEBUG selected_lines:", selected_lines)
 
             # Sort by session number
             if 'session_number' in df.columns:
@@ -1402,23 +1402,25 @@ def register_callbacks(app):
     @callback(
         [Output('dag-iframe', 'srcDoc'),
          Output('dag-zscores', 'children')],
-        Input('sessions-data', 'data')
+        [Input('sessions-data', 'data'), 
+        Input('lang', 'data')],
+        
     )
-    def update_session_dag(sessions_json):
+    def update_session_dag(sessions_json, lang):
         if not sessions_json:
             return "", None
 
         try:
             df = pd.read_json(io.StringIO(sessions_json), orient='split')
-            html_string, last_z = dag.create_session_dag_from_json(df)
-
+            html_string, last_z, definitions = dag.create_session_dag_from_json(df, lang=lang)
             # Build z-score pill bar
             from .ui_components import COLORS
 
             # Use DAG DEFINITIONS for labels (row index 2 = short label), fallback to key
             def _dag_label(key):
                 try:
-                    return dag.DEFINITIONS[key].iloc[2]
+                    print(definitions)
+                    return definitions[key]["name"]
                 except (KeyError, IndexError):
                     return key
 
