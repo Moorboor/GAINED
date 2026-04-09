@@ -479,12 +479,12 @@ def create_sessions_detailed_charts_section():
         # 4. DAG Pipeline
         html.Div([
             html.H3(id='chart-title-dag', children="Psychometrischer Beziehungsgraph (DAG)"),
-            html.Div(id='dag-zscores', style={'marginTop': '16px'}),
             html.Iframe(
                 id='dag-iframe',
                 style={'width': '100%', 'height': '800px', 'border': 'none', 'marginTop': '12px'}
-            )
-        ], style=CARD_STYLE)
+            ),
+            html.Div(id='dag-zscores', style={'marginTop': '16px'}),
+        ], style={**CARD_STYLE, 'paddingBottom': '200px'})
         
     ], id='sessions-detailed-charts-section', style={'display': 'none', 'marginTop': '24px', 'padding': '0 12px'})
 
@@ -492,34 +492,6 @@ def create_sessions_detailed_charts_section():
 def create_sessions_layout():
     """Create the sessions page layout"""
     return html.Div([
-        # Header
-        html.Div([
-            html.H1("GAINED", style={
-                'textAlign': 'center',
-                'marginBottom': '4px',
-                'color': COLORS['gray_900']
-            }),
-            html.P(id='main-subtitle', children="Therapiesitzungsanalyse", style={
-                'textAlign': 'center',
-                'color': COLORS['gray_500'],
-                'fontSize': '14px',
-                'marginBottom': '16px'
-            }),
-            html.Div([
-                dcc.Link(id='sessions-nav-link', children="→ Einzelsitzungsanalyse", href="/single", style={
-                    'color': COLORS['primary'],
-                    'fontSize': '14px',
-                    'textDecoration': 'none',
-                    'fontWeight': '500',
-                    'padding': '8px 16px',
-                    'backgroundColor': COLORS['white'],
-                    'borderRadius': '6px',
-                    'border': f'1px solid {COLORS["gray_200"]}',
-                    'display': 'inline-block'
-                })
-            ], style={'textAlign': 'center', 'marginBottom': '24px'}),
-        ]),
-
         # Main Content
         create_sessions_upload_section(),
         # Removed generic chart section
@@ -543,23 +515,47 @@ def create_layout():
         dcc.Location(id='url', refresh=False),
         dcc.Store(id='lang', data='de', storage_type='local'),
 
-        # Global language bar
+        # Global navbar
         html.Div([
-            dcc.Dropdown(
-                id='lang-dropdown',
-                options=[
-                    {'label': '🇩🇪  Deutsch', 'value': 'de'},
-                    {'label': '🇬🇧  English', 'value': 'en'},
-                ],
-                value='de',
-                clearable=False,
-                searchable=False,
-                style={'width': '140px', 'fontSize': '13px'},
-            ),
+            html.Span("GAINED", style={
+                'fontWeight': '700',
+                'fontSize': '18px',
+                'color': COLORS['gray_900'],
+                'letterSpacing': '0.5px',
+            }),
+            html.Span(id='main-subtitle-nav', children="Therapiesitzungsanalyse", style={
+                'fontSize': '13px',
+                'color': COLORS['gray_500'],
+                'marginLeft': '12px',
+            }),
+            html.Div([
+                dcc.Link(id='sessions-nav-link-bar', children="→ Einzelsitzungsanalyse", href="/single", style={
+                    'color': COLORS['primary'],
+                    'fontSize': '13px',
+                    'textDecoration': 'none',
+                    'fontWeight': '500',
+                    'padding': '6px 14px',
+                    'backgroundColor': COLORS['white'],
+                    'borderRadius': '6px',
+                    'border': f'1px solid {COLORS["gray_200"]}',
+                    'display': 'inline-block',
+                    'marginRight': '16px',
+                }),
+                dcc.Dropdown(
+                    id='lang-dropdown',
+                    options=[
+                        {'label': '🇩🇪  Deutsch', 'value': 'de'},
+                        {'label': '🇬🇧  English', 'value': 'en'},
+                    ],
+                    value='de',
+                    clearable=False,
+                    searchable=False,
+                    style={'width': '140px', 'fontSize': '13px'},
+                ),
+            ], style={'display': 'flex', 'alignItems': 'center', 'marginLeft': 'auto'}),
         ], style={
             'display': 'flex',
             'alignItems': 'center',
-            'justifyContent': 'flex-end',
             'padding': '8px 24px',
             'backgroundColor': COLORS['white'],
             'borderBottom': f'1px solid {COLORS["gray_200"]}',

@@ -9,7 +9,7 @@ def preprocess_df(df):
   '''Takes dataframe and drops columns'''
   df = df[["TCCS_C", "TCCS_SP", "ALLIANCE", "activation_mean", "engagement_mean", 'CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods','HSCL_4_5']].copy()
   
-  df_cts = df.filter(regex=r"^CTS", axis=1).map(lambda x: float(x) if type(x)==int else np.nan)
+  df_cts = df.filter(regex=r"^CTS", axis=1).apply(pd.to_numeric, errors='coerce')
   df["CTS_MEAN"] = np.nanmean(df_cts, axis=1)
   df = df.drop(columns=['CTS_Behaviours', 'CTS_Cognitions', 'CTS_Discovery', 'CTS_Methods'])
 
@@ -254,8 +254,9 @@ def create_session_dag_from_json(df, lang):
     if "session_number" in plot_df.columns:
         plot_df = plot_df.sort_values("session_number").reset_index(drop=True)
         
-    # Narrow down to just metrics
+    # Narrow down to just metrics, coercing all values to numeric (non-numeric → NaN)
     metric_df = plot_df[required_cols].copy()
+    metric_df = metric_df.apply(pd.to_numeric, errors='coerce')
 
     # Calculate Z scores using rolling window of 5
     df_z = get_z_values(df=metric_df, p_mean_series=pd.Series(POPULATION_MEAN), p_std_series=pd.Series(POPULATION_STD), window=5)

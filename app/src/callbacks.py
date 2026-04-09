@@ -58,8 +58,8 @@ def register_callbacks(app):
 
     # Multi-session page language updates (components exist on / and /sessions)
     @callback(
-        [Output('main-subtitle', 'children'),
-         Output('sessions-nav-link', 'children'),
+        [Output('main-subtitle-nav', 'children'),
+         Output('sessions-nav-link-bar', 'children'),
          Output('upload-title', 'children'),
          Output('upload-subtitle', 'children'),
          Output('upload-drop', 'children'),
@@ -744,9 +744,10 @@ def register_callbacks(app):
         def create_trace(metric_name, label, color, dash_style=None):
             if metric_name not in df.columns:
                 return None
+            y_series = pd.to_numeric(df[metric_name], errors='coerce')
             hover_texts = []
-            for _, row in df.iterrows():
-                val = row.get(metric_name)
+            for i, (_, row) in enumerate(df.iterrows()):
+                val = y_series.iloc[i]
                 session_num = row.get('session_number', '')
                 duration = row.get('session_duration_min', '')
                 if pd.isna(val):
@@ -761,7 +762,7 @@ def register_callbacks(app):
             if dash_style:
                 line_config['dash'] = dash_style
             return go.Scatter(
-                x=x_data, y=df[metric_name], mode='lines+markers', name=label,
+                x=x_data, y=y_series, mode='lines+markers', name=label,
                 line=line_config, marker=dict(size=8),
                 hovertemplate='%{text}<extra></extra>', text=hover_texts,
                 visible=True,
@@ -937,9 +938,10 @@ def register_callbacks(app):
                 if metric_name not in df.columns:
                     return None
 
+                y_series = pd.to_numeric(df[metric_name], errors='coerce')
                 hover_texts = []
-                for _, row in df.iterrows():
-                    val = row.get(metric_name)
+                for i, (_, row) in enumerate(df.iterrows()):
+                    val = y_series.iloc[i]
                     session_num = row.get('session_number', '')
                     duration = row.get('session_duration_min', '')
                     if pd.isna(val):
@@ -957,7 +959,7 @@ def register_callbacks(app):
 
                 return go.Scatter(
                     x=x_data,
-                    y=df[metric_name],
+                    y=y_series,
                     mode='lines+markers',
                     name=label,
                     line=line_config,
