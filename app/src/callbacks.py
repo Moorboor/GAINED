@@ -1,11 +1,13 @@
 """
 Callbacks for GAINED application
 """
+import hashlib
 import io
 import json
 import logging
 import os
 
+import numpy as np
 import dash
 import pandas as pd
 import plotly.graph_objects as go
@@ -27,6 +29,17 @@ logger = logging.getLogger(__name__)
 import src.dag as dag
 
 
+def _session_charts_uirevision(sessions_json, selected_lines):
+    """
+    Plotly.js can persist per-trace visibility across figure updates (e.g. first trace
+    stays 'legendonly' / hidden after data loads). A changing uirevision resets that UI state.
+    """
+    sl = selected_lines if isinstance(selected_lines, list) else list(selected_lines or [])
+    sl = sorted(sl)
+    raw = ((sessions_json or '') + json.dumps(sl)).encode('utf-8', errors='replace')
+    return hashlib.md5(raw).hexdigest()
+
+
 _STRINGS_PATH = os.path.join(os.path.dirname(__file__), 'strings.json')
 with open(_STRINGS_PATH, 'r', encoding='utf-8') as _f:
     _STRINGS = json.load(_f)
@@ -43,11 +56,10 @@ def register_callbacks(app):
     def update_lang(value):
         return value or 'de'
 
-    # Sessions page language updates (only exist when on /sessions)
+    # Multi-session page language updates (components exist on / and /sessions)
     @callback(
-        [Output('sessions-title', 'children'),
-         Output('sessions-subtitle', 'children'),
-         Output('sessions-back-link', 'children'),
+        [Output('main-subtitle', 'children'),
+         Output('sessions-nav-link', 'children'),
          Output('upload-title', 'children'),
          Output('upload-subtitle', 'children'),
          Output('upload-drop', 'children'),
@@ -68,9 +80,8 @@ def register_callbacks(app):
         lang = lang or 'de'
         rt = _t(lang, 'rationale_title')
         return [
-            _t(lang, 'sessions_title'),
-            _t(lang, 'sessions_subtitle'),
-            _t(lang, 'sessions_back_link'),
+            _t(lang, 'main_subtitle'),
+            _t(lang, 'sessions_nav_link'),
             _t(lang, 'upload_title'),
             _t(lang, 'upload_subtitle'),
             _t(lang, 'upload_drop'),
@@ -83,16 +94,58 @@ def register_callbacks(app):
             rt, rt, rt,
         ]
 
-    # Main page language updates (only exist when on /)
+    # Single-session page language updates (components exist on /single)
     @callback(
-        [Output('main-subtitle', 'children'),
-         Output('main-nav-link', 'children')],
+        [Output('main-nav-link', 'children'),
+         Output('single-upload-title', 'children'),
+         Output('single-upload-subtitle', 'children'),
+         Output('single-audio-label', 'children'),
+         Output('single-audio-drop', 'children'),
+         Output('single-audio-browse', 'children'),
+         Output('single-transcript-label', 'children'),
+         Output('single-transcript-drop', 'children'),
+         Output('single-transcript-browse', 'children'),
+         Output('single-audio-section-title', 'children'),
+         Output('single-waveform-placeholder', 'children'),
+         Output('single-btn-init', 'children'),
+         Output('single-btn-play', 'children'),
+         Output('single-transcript-title', 'children'),
+         Output('single-interventions-title', 'children'),
+         Output('single-interventions-subtitle', 'children'),
+         Output('single-interventions-therapist', 'children'),
+         Output('single-interventions-patient', 'children'),
+         Output('single-rationale-title', 'children'),
+         Output('single-rationale-subtitle', 'children'),
+         Output('single-rationale-placeholder', 'children'),
+         ],
         Input('lang', 'data'),
         prevent_initial_call=True,
     )
     def update_main_language(lang):
         lang = lang or 'de'
-        return [_t(lang, 'main_subtitle'), _t(lang, 'sessions_nav_link')]
+        return [
+            _t(lang, 'sessions_back_link'),
+            _t(lang, 'single_upload_title'),
+            _t(lang, 'single_upload_subtitle'),
+            _t(lang, 'single_audio_label'),
+            _t(lang, 'single_audio_drop'),
+            _t(lang, 'single_audio_browse'),
+            _t(lang, 'single_transcript_label'),
+            _t(lang, 'single_transcript_drop'),
+            _t(lang, 'single_transcript_browse'),
+            _t(lang, 'single_audio_section_title'),
+            _t(lang, 'single_waveform_placeholder'),
+            _t(lang, 'single_btn_init'),
+            _t(lang, 'single_btn_play'),
+            _t(lang, 'single_transcript_title'),
+            _t(lang, 'single_interventions_title'),
+            _t(lang, 'single_interventions_subtitle'),
+            _t(lang, 'single_interventions_therapist'),
+            _t(lang, 'single_interventions_patient'),
+            _t(lang, 'single_rationale_title'),
+            _t(lang, 'single_rationale_subtitle'),
+            _t(lang, 'single_rationale_placeholder'),
+        ]
 
     # Legend definitions per language — mirrors make_legend in ui_components
     _LEGEND_DEFS = {
@@ -327,18 +380,14 @@ def register_callbacks(app):
         audio_src = encode_audio_to_base64(audio_data)
         
         return html.Div([
-            html.P(f"Audio loaded: {audio_data.get('filename', 'Unknown')}", 
-                   style={'color': '#059669', 'marginBottom': '12px', 'fontWeight': '500', 'fontSize': '13px'}),
             html.Audio(
                 id='audio-element',
                 src=audio_src,
-                controls=True,
+                controls=False,
                 autoPlay=False,
                 preload='auto',
-                style={'width': '100%', 'marginBottom': '12px'}
+                style={'display': 'none'}
             ),
-            html.P("Waveform visualization below", 
-                   style={'color': '#9ca3af', 'fontSize': '12px', 'marginBottom': '4px'}),
         ])
     
     
@@ -554,282 +603,6 @@ def register_callbacks(app):
             return empty
 
 
-    # Update field plots selector dropdown
-    @callback(
-        [Output('field-plots-selector', 'options'),
-         Output('field-plots-selector', 'value')],
-        Input('transcript-data', 'data')
-    )
-    def update_field_plots_selector(transcript_data):
-        if not transcript_data:
-            return [], []
-
-        try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
-
-            # Find numeric fields that can be plotted
-            excluded_cols = {'segment_id', 'index', 'start', 'end'}
-            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-            plotable_fields = [col for col in numeric_cols if col.lower() not in excluded_cols]
-
-            # Friendly labels for known metric columns
-            friendly_labels = {
-                'TCCS_SP': 'Supportive (TCCS_SP)',
-                'TCCS_C': 'Challenging (TCCS_C)',
-                'challenging': 'Supportive (TCCS_SP)',
-                'supporting': 'Challenging (TCCS_C)',
-                'activation_mean': 'Activation',
-                'engagement_mean': 'Engagement',
-                'CTS_Cognitions': 'CTS Cognitions',
-                'CTS_Behaviours': 'CTS Behaviours',
-                'CTS_Discovery': 'CTS Discovery',
-                'CTS_Methods': 'CTS Methods',
-            }
-
-            options = [{'label': friendly_labels.get(col, col), 'value': col} for col in plotable_fields]
-
-            # Default selection: prefer 'challenging' and 'supporting', fall back to TCCS_SP/TCCS_C
-            default_cols = ['challenging', 'supporting', 'TCCS_SP', 'TCCS_C']
-            default_value = [col for col in default_cols if col in plotable_fields][:2]
-
-            return options, default_value
-
-        except Exception as e:
-            logger.exception("Error updating field plots selector")
-            return [], []
-    
-    
-    # Display field plots with rationale
-    @callback(
-        Output('field-plots-container', 'children'),
-        [Input('field-plots-selector', 'value'),
-         Input('transcript-data', 'data'),
-         Input('rationale-data', 'data')]
-    )
-    def display_field_plots(selected_fields, transcript_data, rationale_data):
-        if not transcript_data or not selected_fields:
-            return html.Div("Select fields above to display plots with rationale", 
-                          style={'textAlign': 'center', 'color': '#9ca3af', 'padding': '40px'})
-        
-        # Limit to 4 fields
-        selected_fields = selected_fields[:4] if isinstance(selected_fields, list) else [selected_fields]
-        
-        try:
-            df = pd.read_json(io.StringIO(transcript_data), orient='split')
-            
-            # Parse rationale data if available
-            rationale_dict = {}
-            if rationale_data:
-                for col_name, rationale_json in rationale_data.items():
-                    try:
-                        rationale_df = pd.read_json(io.StringIO(rationale_json), orient='split')
-                        rationale_dict[col_name] = rationale_df
-                    except Exception:
-                        logger.warning(f"Could not parse rationale for {col_name}")
-            
-            # Determine x-axis: prefer time in minutes when available
-            if 'start' in df.columns:
-                x_data = (df['start'] / 60).round(2)
-                x_label = 'Time (minutes)'
-            elif 'segment_id' in df.columns:
-                x_data = df['segment_id']
-                x_label = 'Segment'
-            else:
-                x_data = df.index
-                x_label = 'Index'
-            
-            # Create plots for each selected field
-            plot_components = []
-            for field in selected_fields:
-                if field not in df.columns:
-                    continue
-                
-                # Get rationale for this field if available (per row)
-                rationale_per_row = None
-                if field in rationale_dict:
-                    rationale_df = rationale_dict[field]
-                    
-                    # Try to match by segment_id or index if available
-                    match_key = None
-                    if 'segment_id' in df.columns and 'segment_id' in rationale_df.columns:
-                        match_key = 'segment_id'
-                    elif 'index' in rationale_df.columns:
-                        match_key = 'index'
-                    
-                    if match_key:
-                        # Merge rationale with main data by match key
-                        merged = df.merge(
-                            rationale_df[[match_key, 'data']] if 'data' in rationale_df.columns else rationale_df[[match_key, field]],
-                            on=match_key,
-                            how='left',
-                            suffixes=('', '_rationale')
-                        )
-                        rationale_col = 'data' if 'data' in merged.columns else field
-                        if rationale_col in merged.columns:
-                            rationale_per_row = merged[rationale_col].astype(str).tolist()
-                    else:
-                        # No match key, assume same order
-                        # Check for 'data' column first
-                        if 'data' in rationale_df.columns:
-                            rationale_per_row = rationale_df['data'].astype(str).tolist()
-                        elif field in rationale_df.columns:
-                            rationale_per_row = rationale_df[field].astype(str).tolist()
-                        else:
-                            # Use first column
-                            rationale_per_row = rationale_df.iloc[:, 0].astype(str).tolist()
-                        
-                        # Ensure same length as main data
-                        if len(rationale_per_row) != len(df):
-                            rationale_per_row = None
-                
-                # Prepare custom hover text with field information and rationale
-                hover_texts = []
-                for idx in range(len(df)):
-                    # Format the main field value
-                    field_value = df[field].iloc[idx]
-                    if pd.notna(field_value) and isinstance(field_value, (int, float)):
-                        hover_parts = [f"<b>{field}</b>: {field_value:.4f}"]
-                    else:
-                        hover_parts = [f"<b>{field}</b>: {field_value}"]
-                    
-                    # Add segment info if available
-                    if 'segment_id' in df.columns:
-                        hover_parts.append(f"<b>Segment</b>: {df['segment_id'].iloc[idx]}")
-                    if 'start' in df.columns and 'end' in df.columns:
-                        hover_parts.append(f"<b>Time</b>: {df['start'].iloc[idx]:.1f}s - {df['end'].iloc[idx]:.1f}s")
-                    
-                    # Add other relevant field information (e.g., emotions, speaker, etc.)
-                    info_fields = ['emotion', 'emotions', 'sentiment', 'speaker']
-                    for info_field in info_fields:
-                        if info_field in df.columns:
-                            value = df[info_field].iloc[idx]
-                            if pd.notna(value) and str(value).strip():
-                                hover_parts.append(f"<b>{info_field}</b>: {value}")
-                    
-                    # Add text preview (truncated)
-                    if 'text' in df.columns:
-                        text_value = df['text'].iloc[idx]
-                        if pd.notna(text_value) and str(text_value).strip():
-                            text_str = str(text_value)
-                            if len(text_str) > 100:
-                                text_str = text_str[:100] + "..."
-                            hover_parts.append(f"<b>Text</b>: {text_str}")
-                    
-                    # Add rationale if available
-                    if rationale_per_row and idx < len(rationale_per_row):
-                        rationale_val = rationale_per_row[idx]
-                        if pd.notna(rationale_val) and str(rationale_val).strip() and str(rationale_val).lower() != 'nan':
-                            rationale_str = str(rationale_val).strip()
-                            # Truncate long rationale in tooltip
-                            if len(rationale_str) > 200:
-                                rationale_str = rationale_str[:200] + "..."
-                            hover_parts.append(f"<br><b>Rationale</b>: {rationale_str}")
-                    
-                    hover_texts.append("<br>".join(hover_parts))
-                
-                # Create plot with enhanced tooltips
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=x_data,
-                    y=df[field],
-                    mode='lines+markers',
-                    name=field,
-                    line=dict(width=2),
-                    marker=dict(size=6),
-                    hovertemplate='%{text}<extra></extra>',
-                    text=hover_texts
-                ))
-                
-                fig.update_layout(
-                    title=field,
-                    xaxis_title=x_label,
-                    yaxis_title='Value',
-                    hovermode='closest',
-                    template='plotly_white',
-                    height=350,
-                    margin=dict(l=50, r=50, t=50, b=50)
-                )
-                
-                # Get rationale for this field if available (for display below plot)
-                rationale_text = None
-                if field in rationale_dict:
-                    rationale_df = rationale_dict[field]
-                    
-                    # Check for 'data' column first
-                    if 'data' in rationale_df.columns:
-                        rationale_values = rationale_df['data'].dropna().astype(str).tolist()
-                        if rationale_values:
-                            # Filter out 'nan' strings
-                            rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
-                            if rationale_values:
-                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
-                    elif field in rationale_df.columns:
-                        # Get non-null values from the rationale column
-                        rationale_values = rationale_df[field].dropna().astype(str).tolist()
-                        if rationale_values:
-                            rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
-                            if rationale_values:
-                                rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
-                    else:
-                        # Try to find a text/description column in rationale
-                        text_cols = [col for col in rationale_df.columns 
-                                   if any(keyword in col.lower() for keyword in ['text', 'description', 'rationale', 'reason', 'explanation'])]
-                        if text_cols:
-                            # Combine all rationale text
-                            rationale_values = rationale_df[text_cols[0]].dropna().astype(str).tolist()
-                            if rationale_values:
-                                rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
-                                if rationale_values:
-                                    rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
-                        elif len(rationale_df.columns) > 0:
-                            # Use first column if no obvious text column
-                            rationale_values = rationale_df.iloc[:, 0].dropna().astype(str).tolist()
-                            if rationale_values:
-                                rationale_values = [v for v in rationale_values if v.lower() != 'nan' and v.strip()]
-                                if rationale_values:
-                                    rationale_text = '\n'.join(rationale_values) if len(rationale_values) > 1 else rationale_values[0]
-                
-                # Create component for this field
-                field_component = html.Div([
-                    dcc.Graph(figure=fig, id={'type': 'field-plot', 'field': field}),
-                    html.Div([
-                        html.H4("Rationale", style={'fontSize': '13px', 'fontWeight': '600', 'marginBottom': '8px', 'color': '#374151'}),
-                        html.Div(
-                            rationale_text if rationale_text else "No rationale available for this field",
-                            style={
-                                'padding': '12px 16px',
-                                'backgroundColor': '#f9fafb',
-                                'borderRadius': '6px',
-                                'borderLeft': '3px solid #2563eb',
-                                'fontSize': '13px',
-                                'lineHeight': '1.6',
-                                'color': '#374151' if rationale_text else '#9ca3af',
-                                'fontStyle': 'italic' if not rationale_text else 'normal',
-                                'whiteSpace': 'pre-line'
-                            }
-                        )
-                    ], style={'marginTop': '12px', 'marginBottom': '24px'})
-                ], style={
-                    'marginBottom': '24px',
-                    'padding': '16px',
-                    'backgroundColor': '#ffffff',
-                    'borderRadius': '8px',
-                    'border': '1px solid #e5e7eb',
-                    'boxShadow': '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
-                })
-                
-                plot_components.append(field_component)
-            
-            if not plot_components:
-                return html.Div("No valid fields selected", 
-                              style={'textAlign': 'center', 'color': '#9ca3af', 'padding': '40px'})
-            
-            return plot_components
-        
-        except Exception as e:
-            logger.exception("Error creating field plots")
-            return html.Div(f"Error displaying plots: {str(e)}", 
-                          style={'textAlign': 'center', 'color': '#dc2626', 'padding': '40px', 'fontSize': '13px'})
 
 
     # Show/hide session rationale section
@@ -901,19 +674,6 @@ def register_callbacks(app):
         return cards
     
     
-    # Show/hide field plots section when transcript data is available
-    @callback(
-        Output('field-plots-section', 'style'),
-        Input('transcript-data', 'data')
-    )
-    def update_field_plots_section_visibility(transcript_data):
-        visible_style = {
-            'padding': '20px', 'backgroundColor': '#ffffff', 'borderRadius': '10px',
-            'marginBottom': '20px', 'boxShadow': '0 2px 4px rgba(0,0,0,0.1)', 'display': 'block'
-        }
-        hidden_style = {'display': 'none'}
-        
-        return visible_style if transcript_data else hidden_style
 
 
     # Routing callback
@@ -923,11 +683,11 @@ def register_callbacks(app):
     )
     def display_page(pathname):
         from .ui_components import create_main_analysis_layout, create_sessions_layout
-        
-        if pathname == '/sessions':
+
+        # Multi-session is the default at /; /sessions kept for old bookmarks
+        if pathname in ('/', '/sessions'):
             return create_sessions_layout()
-        else:
-            return create_main_analysis_layout()
+        return create_main_analysis_layout()
 
 
     # Handle sessions file upload
@@ -1003,16 +763,18 @@ def register_callbacks(app):
             return go.Scatter(
                 x=x_data, y=df[metric_name], mode='lines+markers', name=label,
                 line=line_config, marker=dict(size=8),
-                hovertemplate='%{text}<extra></extra>', text=hover_texts
+                hovertemplate='%{text}<extra></extra>', text=hover_texts,
+                visible=True,
             )
 
         return df, x_data, x_label, x_axis_cfg, create_trace
 
     def _add_error_band(fig, x_data, y_vals, color, y_min, y_max):
-        """Add ±1 SD shaded band to fig. y_vals is a pandas Series."""
-        std = float(y_vals.std(ddof=1))
-        y_upper = (y_vals + std).clip(upper=y_max).tolist()
-        y_lower = (y_vals - std).clip(lower=y_min).tolist()
+        """Add ±1 SE shaded band to fig. y_vals is a pandas Series."""
+        n = y_vals.count()
+        se = float(y_vals.std(ddof=1) / np.sqrt(n)) if n > 1 else 0.0
+        y_upper = (y_vals + se).clip(upper=y_max).tolist()
+        y_lower = (y_vals - se).clip(lower=y_min).tolist()
         fig.add_trace(go.Scatter(
             x=x_data + x_data[::-1],
             y=y_upper + y_lower[::-1],
@@ -1201,7 +963,8 @@ def register_callbacks(app):
                     line=line_config,
                     marker=dict(size=8),
                     hovertemplate='%{text}<extra></extra>',
-                    text=hover_texts
+                    text=hover_texts,
+                    visible=True,
                 )
 
             # Axis config
@@ -1253,7 +1016,8 @@ def register_callbacks(app):
                     line=dict(width=2, color='#111827', dash='dash'),
                     marker=dict(size=8),
                     hovertemplate='%{text}<extra></extra>',
-                    text=hover_texts
+                    text=hover_texts,
+                    visible=True,
                 ))
             
             fig_cts.update_layout(
@@ -1967,6 +1731,11 @@ def register_clientside_callbacks(app):
         def toggle_legend_item(n_clicks_list, current_values, selector_id=selector_id):
             from dash import ctx
             if not ctx.triggered_id:
+                raise PreventUpdate
+            # Ignore phantom fires (e.g. pattern-match re-registration when section becomes visible)
+            # A real click always has n_clicks >= 1 for the triggered component
+            triggered_n = ctx.triggered[0]['value'] if ctx.triggered else 0
+            if not triggered_n:
                 raise PreventUpdate
             clicked_value = ctx.triggered_id['value']
             values = list(current_values) if current_values else []

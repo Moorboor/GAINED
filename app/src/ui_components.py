@@ -64,14 +64,15 @@ def create_upload_section():
     }
     
     return html.Div([
-        html.H2("Upload Session Files"),
+        html.H2(id='single-upload-title', children="Sitzungsdateien hochladen"),
         html.P(
-            "Upload audio and transcript files separately",
+            id='single-upload-subtitle',
+            children="Audio- und Transkriptdatei separat hochladen",
             style={'color': COLORS['gray_500'], 'fontSize': '14px', 'marginBottom': '16px'}
         ),
         html.Div([
             html.Div([
-                html.Div('Audio File', style={
+                html.Div(id='single-audio-label', children='Audiodatei', style={
                     'fontSize': '14px',
                     'fontWeight': '500',
                     'color': COLORS['gray_700'],
@@ -80,11 +81,11 @@ def create_upload_section():
                 dcc.Upload(
                     id='upload-audio',
                     children=html.Div([
-                        html.Div('Drop MP3 or WAV file here', style={
+                        html.Div(id='single-audio-drop', children='MP3- oder WAV-Datei hier ablegen', style={
                             'fontSize': '13px',
                             'color': COLORS['gray_500']
                         }),
-                        html.Div('or click to browse', style={
+                        html.Div(id='single-audio-browse', children='oder hier klicken', style={
                             'fontSize': '12px',
                             'color': COLORS['gray_400'],
                             'marginTop': '4px'
@@ -96,7 +97,7 @@ def create_upload_section():
                 ),
             ], style={'flex': '1', 'minWidth': '240px', 'marginRight': '12px'}),
             html.Div([
-                html.Div('Transcript File', style={
+                html.Div(id='single-transcript-label', children='Transkriptdatei', style={
                     'fontSize': '14px',
                     'fontWeight': '500',
                     'color': COLORS['gray_700'],
@@ -105,11 +106,11 @@ def create_upload_section():
                 dcc.Upload(
                     id='upload-transcript',
                     children=html.Div([
-                        html.Div('Drop XLSX or CSV file here', style={
+                        html.Div(id='single-transcript-drop', children='XLSX- oder CSV-Datei hier ablegen', style={
                             'fontSize': '13px',
                             'color': COLORS['gray_500']
                         }),
-                        html.Div('or click to browse', style={
+                        html.Div(id='single-transcript-browse', children='oder hier klicken', style={
                             'fontSize': '12px',
                             'color': COLORS['gray_400'],
                             'marginTop': '4px'
@@ -138,7 +139,7 @@ def create_audio_section():
     }
     
     return html.Div([
-        html.H2("Audio Waveform"),
+        html.H2(id='single-audio-section-title', children="Audio-Wellenform"),
         html.Div(id='audio-player-container'),
         html.Div(id='waveform-container', children=[
             html.Div(id='waveform', style={
@@ -149,18 +150,18 @@ def create_audio_section():
                 'border': f'1px solid {COLORS["gray_200"]}',
                 'padding': '8px',
             }, children=[
-                html.P("Waveform will appear when audio is loaded",
+                html.P(id='single-waveform-placeholder', children="Wellenform erscheint, wenn Audio geladen ist",
                        style={'color': COLORS['gray_400'], 'margin': '48px 0', 'textAlign': 'center', 'fontSize': '13px'})
             ]),
         ]),
         html.Div(id='playback-controls', style={'marginTop': '12px', 'display': 'flex', 'alignItems': 'center'}, children=[
-            html.Button('Init Waveform', id='init-waveform-btn', n_clicks=0, style={
+            html.Button(id='init-waveform-btn', children=html.Span(id='single-btn-init', children='Wellenform initialisieren'), n_clicks=0, style={
                 **button_base, 'backgroundColor': COLORS['success'], 'color': 'white'
             }),
             html.Button('−10s', id='rewind-btn', n_clicks=0, style={
                 **button_base, 'backgroundColor': COLORS['gray_200'], 'color': COLORS['gray_700']
             }),
-            html.Button('▶ Play', id='play-pause-btn', n_clicks=0, style={
+            html.Button(id='play-pause-btn', children=html.Span(id='single-btn-play', children='▶ Abspielen'), n_clicks=0, style={
                 **button_base, 'backgroundColor': COLORS['primary'], 'color': 'white'
             }),
             html.Button('+10s', id='forward-btn', n_clicks=0, style={
@@ -173,7 +174,7 @@ def create_audio_section():
 def create_transcript_section():
     """Create the transcript display section"""
     return html.Div([
-        html.H2("Session Transcript"),
+        html.H2(id='single-transcript-title', children="Sitzungsprotokoll"),
         html.Div(id='transcription-display', style={
             'padding': '12px',
             'backgroundColor': COLORS['gray_50'],
@@ -190,20 +191,20 @@ def create_transcript_section():
 def create_interventions_pie_section():
     """Create the interventions pie chart section showing Therapist and Patient intervention means"""
     return html.Div([
-        html.H2("Interventions Overview"),
-        html.P("Mean of intervention scores across session segments", style={
+        html.H2(id='single-interventions-title', children="Interventionsübersicht"),
+        html.P(id='single-interventions-subtitle', children="Durchschnitt der Interventionswerte über Sitzungssegmente", style={
             'color': COLORS['gray_500'], 'fontSize': '13px', 'marginBottom': '16px'
         }),
         html.Div([
             # Therapist pie
             html.Div([
-                html.H4("Therapist", style={'textAlign': 'center', 'fontSize': '14px', 'marginBottom': '8px'}),
+                html.H4(id='single-interventions-therapist', children="Therapeut", style={'textAlign': 'center', 'fontSize': '14px', 'marginBottom': '8px'}),
                 dcc.Graph(id='therapist-interventions-pie', config={'displayModeBar': False},
                           style={'height': '350px'})
             ], style={'flex': '1', 'minWidth': '300px'}),
             # Patient pie
             html.Div([
-                html.H4("Patient", style={'textAlign': 'center', 'fontSize': '14px', 'marginBottom': '8px'}),
+                html.H4(id='single-interventions-patient', children="Patient", style={'textAlign': 'center', 'fontSize': '14px', 'marginBottom': '8px'}),
                 dcc.Graph(id='patient-interventions-pie', config={'displayModeBar': False},
                           style={'height': '350px'})
             ], style={'flex': '1', 'minWidth': '300px'}),
@@ -214,43 +215,15 @@ def create_interventions_pie_section():
 def create_session_rationale_section():
     """Create the session-level rationale section displaying summary rationale from the rationale sheet"""
     return html.Div([
-        html.H2("Session Rationale Summary", style={'marginBottom': '16px'}),
-        html.P("Summary rationale for session-level metrics (from rationale sheet)", style={
+        html.H2(id='single-rationale-title', children="Sitzungsbegründung", style={'marginBottom': '16px'}),
+        html.P(id='single-rationale-subtitle', children="Zusammenfassung der Begründungen für sitzungsbezogene Metriken", style={
             'color': COLORS['gray_500'], 'fontSize': '13px', 'marginBottom': '16px'
         }),
         html.Div(id='session-rationale-content', children=[
-            html.Div("Upload a session file to see rationale",
+            html.Div(id='single-rationale-placeholder', children="Sitzungsdatei hochladen, um Begründungen zu sehen",
                     style={'textAlign': 'center', 'color': COLORS['gray_400'], 'padding': '40px', 'fontSize': '14px'})
         ])
     ], id='session-rationale-section', style={**CARD_STYLE, 'display': 'none'})
-
-
-def create_field_plots_section():
-    """Create the field plots section with rationale display"""
-    return html.Div([
-        html.H2("Field Analysis with Rationale"),
-        html.Div([
-            html.Label("Select up to 4 fields to plot", style={
-                'fontSize': '13px',
-                'fontWeight': '500',
-                'color': COLORS['gray_600'],
-                'marginBottom': '8px',
-                'display': 'block'
-            }),
-            dcc.Dropdown(
-                id='field-plots-selector',
-                placeholder="Select fields...",
-                multi=True,
-                maxHeight=200,
-                style={'marginBottom': '16px'}
-            ),
-        ]),
-        html.Div(id='field-plots-container', children=[
-            html.Div("Select fields above to display plots",
-                    style={'textAlign': 'center', 'color': COLORS['gray_400'], 'padding': '40px', 'fontSize': '14px'})
-        ])
-    ], id='field-plots-section', style={**CARD_STYLE, 'display': 'none'})
-
 
 
 
@@ -521,19 +494,19 @@ def create_sessions_layout():
     return html.Div([
         # Header
         html.Div([
-            html.H1(id='sessions-title', children="GAINED – Sitzungsanalyse", style={
+            html.H1("GAINED", style={
                 'textAlign': 'center',
                 'marginBottom': '4px',
                 'color': COLORS['gray_900']
             }),
-            html.P(id='sessions-subtitle', children="Verläufe über mehrere Therapiesitzungen analysieren", style={
+            html.P(id='main-subtitle', children="Therapiesitzungsanalyse", style={
                 'textAlign': 'center',
                 'color': COLORS['gray_500'],
                 'fontSize': '14px',
-                'marginBottom': '24px'
+                'marginBottom': '16px'
             }),
             html.Div([
-                dcc.Link(id='sessions-back-link', children="← Zurück zur Einzelsitzungsanalyse", href="/", style={
+                dcc.Link(id='sessions-nav-link', children="→ Einzelsitzungsanalyse", href="/single", style={
                     'color': COLORS['primary'],
                     'fontSize': '14px',
                     'textDecoration': 'none',
@@ -544,9 +517,9 @@ def create_sessions_layout():
                     'border': f'1px solid {COLORS["gray_200"]}',
                     'display': 'inline-block'
                 })
-            ], style={'textAlign': 'center', 'marginBottom': '24px'})
+            ], style={'textAlign': 'center', 'marginBottom': '24px'}),
         ]),
-        
+
         # Main Content
         create_sessions_upload_section(),
         # Removed generic chart section
@@ -602,24 +575,9 @@ def create_layout():
 def create_main_analysis_layout():
     """Create the single session analysis layout (original layout)"""
     return html.Div([
-        # Header
+        # Back to main
         html.Div([
-            html.H1("GAINED", style={
-                'textAlign': 'center',
-                'marginBottom': '4px',
-                'color': COLORS['gray_900']
-            }),
-            html.P(id='main-subtitle', children="Therapiesitzungsanalyse", style={
-                'textAlign': 'center',
-                'color': COLORS['gray_500'],
-                'fontSize': '14px',
-                'marginBottom': '24px'
-            })
-        ]),
-        
-        # Navigation to Sessions
-        html.Div([
-            dcc.Link(id='main-nav-link', children="Zur Mehrsitzungsanalyse →", href="/sessions", style={
+            dcc.Link(id='main-nav-link', children="← Mehrsitzungsanalyse", href="/", style={
                 'color': COLORS['primary'],
                 'fontSize': '14px',
                 'textDecoration': 'none',
@@ -630,14 +588,13 @@ def create_main_analysis_layout():
                 'border': f'1px solid {COLORS["gray_200"]}',
                 'display': 'inline-block'
             })
-        ], style={'textAlign': 'center', 'marginTop': '16px', 'marginBottom': '16px'}),
+        ], style={'marginBottom': '16px'}),
         
         # Main Content
         create_upload_section(),
         create_audio_section(),
         create_transcript_section(),
         create_interventions_pie_section(),
-        create_field_plots_section(),
         create_session_rationale_section(),
         
         # Data Stores

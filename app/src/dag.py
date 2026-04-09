@@ -186,9 +186,8 @@ class DAG():
           font_size = max(14, min(50, (22 + 20*value)))
           # Use .iloc for positional indexing to avoid FutureWarning
           try:
-              # title_text = f"Z-Score: {value:.2f}, {self.definitions[key]["definition"]}"
-              label_text = f"{self.definitions[key]["name"]}"
-              definition_text = self.definitions[key]['definition']
+              label_text = str(self.definitions[key]["name"])
+              definition_text = self.definitions[key]["definition"]
               wrapped_definition = textwrap.fill(str(definition_text), width=50)
               title_text = f"Z-Score: {value:.2f}\n\n{wrapped_definition}"
 

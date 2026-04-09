@@ -426,7 +426,7 @@ def create_sessions_layout():
                 'marginBottom': '24px'
             }),
             html.Div([
-                dcc.Link("← Back to Single Session Analysis", href="/", style={
+                dcc.Link("Single Session Analysis", href="/single", style={
                     'color': COLORS['primary'],
                     'fontSize': '14px',
                     'textDecoration': 'none',
@@ -495,7 +495,7 @@ def create_main_analysis_layout():
         
         # Navigation to Sessions
         html.Div([
-            dcc.Link("Go to Multi-Session Analysis →", href="/sessions", style={
+            dcc.Link("Go to Multi-Session Analysis →", href="/", style={
                 'display': 'block',
                 'width': '100%',
                 'padding': '16px',
