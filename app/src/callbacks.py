@@ -7,19 +7,19 @@ import json
 import logging
 import os
 
-import numpy as np
 import dash
+import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
-from dash import html, dcc, Input, Output, State, callback, no_update
+import plotly.graph_objects as go
+from dash import Input, Output, State, callback, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
 from .data_loader import (
-    get_patient_sessions, 
+    encode_audio_to_base64,
+    get_patient_sessions,
     load_session_from_disk,
     load_session_with_rationale,
-    encode_audio_to_base64,
     process_audio_upload,
     process_transcript_upload_with_rationale,
 )
@@ -843,9 +843,9 @@ def register_callbacks(app):
                 ('activation', 'Aktivierung',   '#9333ea'),
                 ('engagement', 'Engagement',     '#059669'),
                 ('epo_1',      'Wohlbefinden',   '#0ea5e9'),
+                ('alliance', 'Allianz', '#f59e0b'),
             ]
             secondary_metrics = [
-                ('alliance', 'Allianz', '#f59e0b'),
             ]
             show_bands = len(df) >= 2
             has_secondary = False
