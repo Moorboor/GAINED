@@ -1,10 +1,10 @@
 """
 Data loading utilities for GAINED application
 """
-import logging
-import os
 import base64
 import io
+import logging
+import os
 
 import pandas as pd
 
@@ -482,11 +482,11 @@ def extract_metadata_from_session(file_buffer, filename):
             'rationale': ['CTS_Methods_rationale', 'methods_rationale']
         },
         'alliance': {
-            'metric': ['ALLIANCE', 'alliance'],
+            'metric': ['ALLIANCE', 'alliance', 'alliance_mean'],
             'rationale': ['ALLIANCE_rationale', 'alliance_rationale']
         },
         'epo_1': {
-            'metric': ['EPO_1', 'EPO1', 'epo_1', 'epo1'],
+            'metric': ['EPO_1', 'EPO1', 'epo_1', 'epo1','epo_0'],
             'rationale': ['EPO_1_rationale', 'EPO1_rationale', 'epo_1_rationale']
         },
     }
